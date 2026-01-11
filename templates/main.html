@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>SecureVision – Encrypted Video Platform</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: #020617;
+            padding: 30px;
+            width: 800px;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #38bdf8;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+        }
+
+        h2 {
+            margin-bottom: 15px;
+            color: #a5f3fc;
+        }
+
+        input,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 15px;
+        }
+
+        input {
+            background: #020617;
+            color: #e5e7eb;
+            border: 1px solid #334155;
+        }
+
+        button {
+            background: #38bdf8;
+            color: #020617;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #0ea5e9;
+        }
+
+        video {
+            margin-top: 15px;
+            width: 100%;
+            border-radius: 8px;
+            background: black;
+        }
+
+        .note {
+            font-size: 13px;
+            opacity: 0.8;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>🔐 SecureVision</h1>
+
+        <!-- Upload Section -->
+        <div class="section">
+            <h2>Encrypt & Upload Video</h2>
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <input type="file" name="video" required>
+                <input type="password" name="password" placeholder="Encryption Passphrase" required>
+                <button type="submit">Encrypt & Upload</button>
+            </form>
+            <p class="note">The video is encrypted using AES-256-GCM before storage.</p>
+        </div>
+
+        <!-- Play Section -->
+        <div class="section">
+            <h2>Secure Video Playback</h2>
+
+            <input type="text" id="filename" placeholder="encrypted_video.mp4.enc">
+            <input type="password" id="password" placeholder="Decryption Passphrase">
+            <button onclick="playVideo()">Play Securely</button>
+
+            <video id="videoPlayer" controls></video>
+            <p class="note">Video is decrypted only in memory and never stored locally.</p>
+        </div>
+    </div>
+
+    <script src="/static/player.js"></script>
+
+</body>
+
+</html>
