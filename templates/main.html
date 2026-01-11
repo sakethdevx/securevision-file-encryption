@@ -3,10 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>SecureVision – Encrypted Video Platform</title>
+    <title>SecureVision – Client-Side Encryption</title>
+
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             background: #0f172a;
             color: #e5e7eb;
             display: flex;
@@ -16,29 +17,29 @@
         }
 
         .container {
+            width: 850px;
             background: #020617;
             padding: 30px;
-            width: 800px;
             border-radius: 12px;
-            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
         }
 
         h1 {
             text-align: center;
-            margin-bottom: 25px;
             color: #38bdf8;
+            margin-bottom: 25px;
         }
 
         .section {
-            margin-bottom: 30px;
-            padding: 20px;
             border: 1px solid #1e293b;
+            padding: 20px;
             border-radius: 10px;
+            margin-bottom: 30px;
         }
 
         h2 {
-            margin-bottom: 15px;
             color: #a5f3fc;
+            margin-bottom: 15px;
         }
 
         input,
@@ -88,31 +89,41 @@
     <div class="container">
         <h1>🔐 SecureVision</h1>
 
-        <!-- Upload Section -->
+        <!-- CLIENT-SIDE ENCRYPTION UPLOAD -->
         <div class="section">
-            <h2>Encrypt & Upload Video</h2>
-            <form action="/upload" method="post" enctype="multipart/form-data">
-                <input type="file" name="video" required>
-                <input type="password" name="password" placeholder="Encryption Passphrase" required>
-                <button type="submit">Encrypt & Upload</button>
-            </form>
-            <p class="note">The video is encrypted using AES-256-GCM before storage.</p>
+            <h2>Encrypt & Upload (Client-Side)</h2>
+
+            <input type="file" id="videoFile" accept="video/*">
+            <input type="password" id="encPassword" placeholder="Encryption passphrase">
+
+            <button onclick="uploadEncrypted()">Encrypt & Upload</button>
+
+            <p class="note">
+                Encryption is performed entirely in the browser using AES-256-GCM.
+                The server never receives the password or plaintext video.
+            </p>
         </div>
 
-        <!-- Play Section -->
+        <!-- CLIENT-SIDE DECRYPTION PLAYBACK -->
         <div class="section">
-            <h2>Secure Video Playback</h2>
+            <h2>Secure Playback</h2>
 
-            <input type="text" id="filename" placeholder="encrypted_video.mp4.enc">
-            <input type="password" id="password" placeholder="Decryption Passphrase">
-            <button onclick="playVideo()">Play Securely</button>
+            <input type="text" id="filename" placeholder="example.mp4.enc">
+            <input type="password" id="decPassword" placeholder="Decryption passphrase">
+
+            <button onclick="playEncrypted(filename.value)">Decrypt & Play</button>
 
             <video id="videoPlayer" controls></video>
-            <p class="note">Video is decrypted only in memory and never stored locally.</p>
+
+            <p class="note">
+                Video is decrypted only in memory and never stored on disk.
+            </p>
         </div>
     </div>
 
-    <script src="/static/player.js"></script>
+    <!-- CLIENT-SIDE CRYPTO -->
+    <script src="/static/crypto.js"></script>
+    <script src="/static/client_player.js"></script>
 
 </body>
 
