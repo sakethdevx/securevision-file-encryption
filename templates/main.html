@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>SecureVision – Client-Side Encryption</title>
+    <title>SecureVision – Stateless Encryption Model</title>
 
     <style>
         body {
@@ -17,7 +17,7 @@
         }
 
         .container {
-            width: 850px;
+            width: 900px;
             background: #020617;
             padding: 30px;
             border-radius: 12px;
@@ -27,7 +27,7 @@
         h1 {
             text-align: center;
             color: #38bdf8;
-            margin-bottom: 25px;
+            margin-bottom: 30px;
         }
 
         .section {
@@ -69,6 +69,21 @@
             background: #0ea5e9;
         }
 
+        .button-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .button-row button {
+            width: 100%;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
         video {
             margin-top: 15px;
             width: 100%;
@@ -76,10 +91,24 @@
             background: black;
         }
 
-        .note {
+        .log-toggle {
+            margin-top: 10px;
+            background: #1e293b;
+            color: #e5e7eb;
+        }
+
+        .log-box {
+            display: none;
+            margin-top: 10px;
+            background: #020617;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 10px;
+            height: 180px;
+            overflow-y: auto;
+            font-family: monospace;
             font-size: 13px;
-            opacity: 0.8;
-            margin-top: 8px;
+            white-space: pre-wrap;
         }
     </style>
 </head>
@@ -87,43 +116,249 @@
 <body>
 
     <div class="container">
-        <h1>🔐 SecureVision</h1>
+        <h1>🔐 SecureVision - Client-Side Encryption</h1>
 
-        <!-- CLIENT-SIDE ENCRYPTION UPLOAD -->
+        <!-- ================= ENCRYPT ================= -->
         <div class="section">
-            <h2>Encrypt & Upload (Client-Side)</h2>
+            <h2>Encrypt & Download (100% Client-Side)</h2>
 
-            <input type="file" id="videoFile" accept="video/*">
-            <input type="password" id="encPassword" placeholder="Encryption passphrase">
+            <input type="file" id="plainVideo" accept="video/*">
+            <input type="password" id="encKey" placeholder="Encryption key">
 
-            <button onclick="uploadEncrypted()">Encrypt & Upload</button>
+            <button type="button" onclick="encryptAndDownload()">Encrypt & Download</button>
+            <p id="encStatus" class="status"></p>
 
-            <p class="note">
-                Encryption is performed entirely in the browser using AES-256-GCM.
-                The server never receives the password or plaintext video.
-            </p>
+            <button class="log-toggle" onclick="toggleLogs('encLogBox')">
+                📜 Show / Hide Encryption Logs
+            </button>
+            <div id="encLogBox" class="log-box"></div>
         </div>
 
-        <!-- CLIENT-SIDE DECRYPTION PLAYBACK -->
+        <!-- ================= DECRYPT ================= -->
         <div class="section">
-            <h2>Secure Playback</h2>
+            <h2>Decrypt – Play or Download</h2>
 
-            <input type="text" id="filename" placeholder="example.mp4.enc">
-            <input type="password" id="decPassword" placeholder="Decryption passphrase">
+            <input type="file" id="encFile">
+            <input type="password" id="decKey" placeholder="Decryption key">
 
-            <button onclick="playEncrypted(filename.value)">Decrypt & Play</button>
+            <div class="button-row">
+                <button type="button" onclick="decryptAndPlay()">▶ Play</button>
+                <button type="button" onclick="decryptAndDownload()">⬇ Download</button>
+            </div>
 
+            <p id="status" class="status"></p>
             <video id="videoPlayer" controls></video>
 
-            <p class="note">
-                Video is decrypted only in memory and never stored on disk.
-            </p>
+            <button class="log-toggle" onclick="toggleLogs('decLogBox')">
+                📜 Show / Hide Decryption Logs
+            </button>
+            <div id="decLogBox" class="log-box"></div>
         </div>
     </div>
 
-    <!-- CLIENT-SIDE CRYPTO -->
-    <script src="/static/crypto.js"></script>
-    <script src="/static/client_player.js"></script>
+    <script>
+        /* ========= LOGGING SYSTEM ========= */
+
+        function addLog(boxId, message) {
+            const time = new Date().toLocaleTimeString();
+            const line = `[${time}] ${message}\n`;
+
+            console.log(message);
+
+            const box = document.getElementById(boxId);
+            box.textContent += line;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function toggleLogs(id) {
+            const box = document.getElementById(id);
+            box.style.display = box.style.display === "none" ? "block" : "none";
+        }
+
+        /* ========= CRYPTO UTILITIES (Client-Side) ========= */
+
+        // Derive AES-GCM key from password using SHA-256
+        async function deriveKey(password) {
+            const encoder = new TextEncoder();
+            const keyMaterial = encoder.encode(password);
+
+            // Hash the password with SHA-256 to get 32 bytes
+            const hashBuffer = await crypto.subtle.digest('SHA-256', keyMaterial);
+
+            // Import the hash as an AES-GCM key
+            return await crypto.subtle.importKey(
+                'raw',
+                hashBuffer,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        // Encrypt data using AES-GCM (compatible with Python AESGCM)
+        async function encryptData(data, password) {
+            const key = await deriveKey(password);
+
+            // Generate random 12-byte nonce (same as Python's os.urandom(12))
+            const nonce = crypto.getRandomValues(new Uint8Array(12));
+
+            // Encrypt the data
+            const encrypted = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: nonce },
+                key,
+                data
+            );
+
+            // Concatenate nonce + encrypted data (same format as Python)
+            const result = new Uint8Array(nonce.length + encrypted.byteLength);
+            result.set(nonce, 0);
+            result.set(new Uint8Array(encrypted), nonce.length);
+
+            return result;
+        }
+
+        // Decrypt data using AES-GCM (compatible with Python AESGCM)
+        async function decryptData(encryptedData, password) {
+            const key = await deriveKey(password);
+
+            // Extract nonce (first 12 bytes) and encrypted data
+            const nonce = encryptedData.slice(0, 12);
+            const data = encryptedData.slice(12);
+
+            // Decrypt the data
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: nonce },
+                key,
+                data
+            );
+
+            return new Uint8Array(decrypted);
+        }
+
+        /* ========= ENCRYPT (Client-Side) ========= */
+
+        async function encryptAndDownload() {
+            const status = document.getElementById("encStatus");
+            addLog("encLogBox", "🔐 Client-side encryption started");
+
+            const file = document.getElementById("plainVideo").files[0];
+            const key = document.getElementById("encKey").value;
+
+            if (!file || !key) {
+                addLog("encLogBox", "❌ Missing video or key");
+                status.textContent = "Please select video and enter key";
+                status.style.color = "#fca5a5";
+                return;
+            }
+
+            addLog("encLogBox", `📁 File: ${file.name}`);
+            addLog("encLogBox", `📦 Size: ${file.size} bytes`);
+            addLog("encLogBox", "🔑 Deriving encryption key from password");
+
+            try {
+                // Read file as ArrayBuffer
+                addLog("encLogBox", "📖 Reading video file");
+                const arrayBuffer = await file.arrayBuffer();
+
+                // Encrypt on client side
+                addLog("encLogBox", "🔐 Encrypting video (this may take a moment for large files)");
+                const encrypted = await encryptData(arrayBuffer, key);
+
+                addLog("encLogBox", "✅ Encryption completed");
+                addLog("encLogBox", `📦 Encrypted size: ${encrypted.length} bytes`);
+                addLog("encLogBox", "⬇ Preparing download");
+
+                // Create blob and download
+                const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "video.enc";
+                a.click();
+
+                addLog("encLogBox", "✅ Encrypted file download completed");
+                addLog("encLogBox", "💾 No data was uploaded to server!");
+
+                status.textContent = "✅ Encryption successful (Client-Side)";
+                status.style.color = "#86efac";
+            } catch (e) {
+                addLog("encLogBox", `❌ ${e.message}`);
+                status.textContent = e.message;
+                status.style.color = "#fca5a5";
+            }
+        }
+
+        /* ========= DECRYPT (Client-Side) ========= */
+
+        async function decryptFile() {
+            addLog("decLogBox", "🔓 Client-side decryption started");
+
+            const file = document.getElementById("encFile").files[0];
+            const key = document.getElementById("decKey").value;
+
+            if (!file || !key) throw new Error("Missing encrypted file or key");
+
+            addLog("decLogBox", `📁 Encrypted file: ${file.name}`);
+            addLog("decLogBox", `📦 Size: ${file.size} bytes`);
+            addLog("decLogBox", "🔑 Deriving decryption key from password");
+
+            // Read file as ArrayBuffer
+            addLog("decLogBox", "📖 Reading encrypted file");
+            const arrayBuffer = await file.arrayBuffer();
+            const encryptedData = new Uint8Array(arrayBuffer);
+
+            // Decrypt on client side
+            addLog("decLogBox", "🔓 Decrypting video (this may take a moment for large files)");
+            const decrypted = await decryptData(encryptedData, key);
+
+            addLog("decLogBox", "✅ Decryption completed");
+            addLog("decLogBox", `📦 Decrypted size: ${decrypted.length} bytes`);
+            addLog("decLogBox", "💾 No data was uploaded to server!");
+
+            return new Blob([decrypted], { type: 'video/mp4' });
+        }
+
+        async function decryptAndPlay() {
+            const status = document.getElementById("status");
+            addLog("decLogBox", "▶ Play clicked");
+
+            try {
+                const blob = await decryptFile();
+                document.getElementById("videoPlayer").src = URL.createObjectURL(blob);
+                addLog("decLogBox", "▶ Playback started");
+
+                status.textContent = "▶ Playing video (Client-Side Decryption)";
+                status.style.color = "#86efac";
+            } catch (e) {
+                addLog("decLogBox", `❌ ${e.message}`);
+                status.textContent = e.message;
+                status.style.color = "#fca5a5";
+            }
+        }
+
+        async function decryptAndDownload() {
+            const status = document.getElementById("status");
+            addLog("decLogBox", "⬇ Download clicked");
+
+            try {
+                const blob = await decryptFile();
+                addLog("decLogBox", "⬇ Downloading decrypted video");
+
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "decrypted_video.mp4";
+                a.click();
+
+                addLog("decLogBox", "✅ Decrypted video download completed");
+
+                status.textContent = "⬇ Downloaded video (Client-Side Decryption)";
+                status.style.color = "#86efac";
+            } catch (e) {
+                addLog("decLogBox", `❌ ${e.message}`);
+                status.textContent = e.message;
+                status.style.color = "#fca5a5";
+            }
+        }
+    </script>
 
 </body>
 
