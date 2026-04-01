@@ -3,363 +3,1159 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>SecureVision – Stateless Encryption Model</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureVision - Professional Encryption Console</title>
     <style>
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            background: #0f172a;
-            color: #e5e7eb;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+        :root {
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --line: #e2e8f0;
+            --primary: #0f766e;
+            --primary-hover: #115e59;
+            --danger: #b91c1c;
+            --success: #166534;
+            --warning: #92400e;
         }
 
-        .container {
-            width: 900px;
-            background: #020617;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, Segoe UI, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 24px;
+        }
+
+        .shell {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
         }
 
         h1 {
-            text-align: center;
-            color: #38bdf8;
-            margin-bottom: 30px;
-        }
-
-        .section {
-            border: 1px solid #1e293b;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
         }
 
         h2 {
-            color: #a5f3fc;
-            margin-bottom: 15px;
+            margin: 0 0 12px 0;
+            font-size: 17px;
         }
 
-        input,
-        button {
-            width: 100%;
-            padding: 12px;
-            margin-top: 10px;
-            border-radius: 6px;
-            border: none;
-            font-size: 15px;
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
         }
 
-        input {
-            background: #020617;
-            color: #e5e7eb;
-            border: 1px solid #334155;
-        }
-
-        button {
-            background: #38bdf8;
-            color: #020617;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        button:hover {
-            background: #0ea5e9;
-        }
-
-        .button-row {
+        .mode-switch {
             display: flex;
-            gap: 15px;
-            margin-top: 10px;
-        }
-
-        .button-row button {
-            width: 100%;
-        }
-
-        .status {
-            margin-top: 10px;
+            align-items: center;
+            gap: 10px;
             font-size: 14px;
         }
 
-        video {
-            margin-top: 15px;
-            width: 100%;
-            border-radius: 8px;
-            background: black;
-        }
-
-        .log-toggle {
-            margin-top: 10px;
-            background: #1e293b;
-            color: #e5e7eb;
-        }
-
-        .log-box {
-            display: none;
-            margin-top: 10px;
-            background: #020617;
-            border: 1px solid #334155;
+        .mode-switch select {
+            padding: 8px 10px;
+            border: 1px solid var(--line);
             border-radius: 6px;
-            padding: 10px;
-            height: 180px;
-            overflow-y: auto;
-            font-family: monospace;
+            background: #fff;
+            font-size: 14px;
+        }
+
+        .proof {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
             font-size: 13px;
+        }
+
+        .proof-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px;
+            background: #fcfcfd;
+        }
+
+        .proof-item b {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        input[type="file"],
+        input[type="password"],
+        button {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+
+        input[type="password"],
+        input[type="file"] {
+            background: #fff;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        button {
+            background: var(--primary);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-row button {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .status {
+            margin-top: 8px;
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        .preview-shell {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px;
+            background: #fafafa;
+            min-height: 280px;
+        }
+
+        .preview-hidden {
+            display: none;
+        }
+
+        .preview-meta {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .preview-frame {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            min-height: 220px;
+        }
+
+        .preview-img,
+        .preview-video,
+        .preview-audio,
+        .preview-text,
+        .preview-pdf {
+            display: none;
+            width: 100%;
+        }
+
+        .preview-img {
+            max-height: 360px;
+            object-fit: contain;
+            background: #fff;
+        }
+
+        .preview-video {
+            max-height: 360px;
+            background: #000;
+        }
+
+        .preview-audio {
+            margin-top: 24px;
+        }
+
+        .preview-text {
+            margin: 0;
+            padding: 10px;
+            min-height: 220px;
+            max-height: 360px;
+            overflow: auto;
+            background: #fff;
+            font-size: 12px;
             white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .preview-pdf {
+            min-height: 420px;
+        }
+
+        .placeholder {
+            color: var(--muted);
+            font-size: 13px;
+            padding: 12px;
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .logs-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .logs-actions button {
+            width: auto;
+            padding: 8px 10px;
+            font-size: 12px;
+            background: #334155;
+        }
+
+        .logs-box {
+            height: 220px;
+            overflow: auto;
+            min-height: 160px;
+            max-height: 70vh;
+            resize: vertical;
+            background: #0b1220;
+            color: #cbd5e1;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+            border: 1px solid #1e293b;
+            white-space: pre-wrap;
+            line-height: 1.45;
+        }
+
+        .ok {
+            color: var(--success);
+        }
+
+        .err {
+            color: var(--danger);
+        }
+
+        .warn {
+            color: var(--warning);
+        }
+
+        .logs-note {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .diagram-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .diagram-controls select,
+        .diagram-controls button {
+            width: auto;
+        }
+
+        .diagram-frame {
+            width: 100%;
+            height: 480px;
+            max-height: 60vh;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            object-fit: contain;
         }
     </style>
 </head>
 
 <body>
-
-    <div class="container">
-        <h1>🔐 SecureVision - Client-Side Encryption</h1>
-
-        <!-- ================= ENCRYPT ================= -->
-        <div class="section">
-            <h2>Encrypt & Download (100% Client-Side)</h2>
-
-            <input type="file" id="plainVideo" accept="video/*">
-            <input type="password" id="encKey" placeholder="Encryption key">
-
-            <button type="button" onclick="encryptAndDownload()">Encrypt & Download</button>
-            <p id="encStatus" class="status"></p>
-
-            <button class="log-toggle" onclick="toggleLogs('encLogBox')">
-                📜 Show / Hide Encryption Logs
-            </button>
-            <div id="encLogBox" class="log-box"></div>
+    <div class="shell">
+        <div class="card header">
+            <div>
+                <h1>SecureVision Encryption Console</h1>
+                <div class="muted">Professional multi-level cryptography workflow for all file types</div>
+            </div>
+            <div class="mode-switch">
+                <label for="processingMode"><b>Processing Mode:</b></label>
+                <select id="processingMode">
+                    <option value="offline" selected>Offline (Client-Side)</option>
+                    <option value="online">Online (Server API)</option>
+                </select>
+            </div>
         </div>
 
-        <!-- ================= DECRYPT ================= -->
-        <div class="section">
-            <h2>Decrypt – Play or Download</h2>
+        <div class="card">
+            <h2>Cryptographic Proof Panel</h2>
+            <div class="proof">
+                <div class="proof-item"><b>Package Format</b><span id="proofFormat">SV02 (Multilevel)</span></div>
+                <div class="proof-item"><b>Encryption Algorithm</b><span id="proofAlgo">AES-256-GCM (Data + Key
+                        Wrap)</span></div>
+                <div class="proof-item"><b>Key Derivation</b><span id="proofKdf">PBKDF2-HMAC-SHA256 (Dual-Salt,
+                        150000)</span></div>
+                <div class="proof-item"><b>Integrity</b><span id="proofIntegrity">Not yet verified</span></div>
+                <div class="proof-item"><b>Authentication</b><span id="proofAuth">HMAC-SHA256 + Hash-Chain Logs</span>
+                </div>
+                <div class="proof-item"><b>Security Layers</b><span id="proofLayers">3 Layers</span></div>
+                <div class="proof-item"><b>Mode</b><span id="proofMode">Offline</span></div>
+                <div class="proof-item"><b>Status</b><span id="proofStatus">Ready</span></div>
+                <div class="proof-item"><b>Metrics</b><span id="proofMetrics">Waiting for operation</span></div>
+            </div>
+        </div>
 
-            <input type="file" id="encFile">
-            <input type="password" id="decKey" placeholder="Decryption key">
-
-            <div class="button-row">
-                <button type="button" onclick="decryptAndPlay()">▶ Play</button>
-                <button type="button" onclick="decryptAndDownload()">⬇ Download</button>
+        <div class="grid">
+            <div class="card">
+                <h2>Encrypt File</h2>
+                <input type="file" id="plainFile">
+                <input type="password" id="encKey" placeholder="Encryption key">
+                <button type="button" onclick="encryptAndDownload()">Encrypt & Download .enc</button>
+                <p id="encStatus" class="status"></p>
             </div>
 
-            <p id="status" class="status"></p>
-            <video id="videoPlayer" controls></video>
+            <div class="card">
+                <h2>Decrypt File</h2>
+                <input type="file" id="encFile">
+                <input type="password" id="decKey" placeholder="Decryption key">
+                <div class="btn-row">
+                    <button type="button" onclick="decryptAndPreview()">Preview Supported Types</button>
+                    <button type="button" onclick="decryptAndDownload()">Download Decrypted File</button>
+                </div>
+                <button type="button" style="margin-top:8px" onclick="verifyEncryptedPackage()">Offline Verify
+                    Package</button>
+                <p id="decStatus" class="status"></p>
+            </div>
+        </div>
 
-            <button class="log-toggle" onclick="toggleLogs('decLogBox')">
-                📜 Show / Hide Decryption Logs
-            </button>
-            <div id="decLogBox" class="log-box"></div>
+        <div class="card">
+            <h2>Preview</h2>
+            <div id="previewShell" class="preview-shell preview-hidden">
+                <div id="previewMeta" class="preview-meta">No file preview yet</div>
+                <div id="previewPlaceholder" class="placeholder">Supported preview types: image, video, audio,
+                    text/csv/json/xml, pdf.</div>
+
+                <img id="previewImage" class="preview-img preview-frame" alt="Preview image">
+                <video id="previewVideo" class="preview-video preview-frame" controls></video>
+                <audio id="previewAudio" class="preview-audio" controls></audio>
+                <pre id="previewText" class="preview-text preview-frame"></pre>
+                <iframe id="previewPdf" class="preview-pdf preview-frame" title="PDF preview"></iframe>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Architecture Diagrams</h2>
+            <div class="diagram-controls">
+                <select id="diagramSelect" onchange="loadSelectedDiagram()">
+                    <option value="crypto">Cryptographic Architecture</option>
+                    <option value="full">Full Architecture</option>
+                </select>
+                <button type="button" id="toggleDiagramBtn" onclick="toggleDiagramPanel()">Show Diagram</button>
+            </div>
+            <div id="diagramShell" class="preview-hidden">
+                <img id="diagramImage" class="diagram-frame" alt="Architecture diagram">
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="logs-header">
+                <h2 style="margin:0">Audit Logs</h2>
+                <div class="logs-actions">
+                    <button type="button" id="toggleLogsBtn" onclick="toggleLogging()">Turn Off Logs</button>
+                    <button type="button" onclick="clearLogs()">Clear Logs</button>
+                </div>
+            </div>
+            <div class="logs-note">Tip: drag the bottom edge of the log panel to expand/collapse manually.</div>
+            <div id="logsBox" class="logs-box"></div>
         </div>
     </div>
 
     <script>
-        /* ========= LOGGING SYSTEM ========= */
+        const PBKDF2_ITERATIONS = 150000;
+        const SALT_LENGTH = 16;
+        const NONCE_LENGTH = 12;
+        const DATA_KEY_LENGTH = 32;
+        const MAC_LENGTH = 32;
+        const HEADER_MAGIC_V2 = "SV02";
+        const HEADER_MAGIC_LEGACY = "SV01";
 
-        function addLog(boxId, message) {
-            const time = new Date().toLocaleTimeString();
-            const line = `[${time}] ${message}\n`;
+        let logsEnabled = true;
+        let lastLogHash = "GENESIS";
 
-            console.log(message);
+        const mimeTextLike = new Set([
+            "application/json",
+            "application/xml",
+            "text/plain",
+            "text/csv",
+            "text/xml"
+        ]);
 
-            const box = document.getElementById(boxId);
-            box.textContent += line;
-            box.scrollTop = box.scrollHeight;
+        function currentMode() {
+            return document.getElementById("processingMode").value;
         }
 
-        function toggleLogs(id) {
-            const box = document.getElementById(id);
-            box.style.display = box.style.display === "none" ? "block" : "none";
+        document.getElementById("processingMode").addEventListener("change", () => {
+            const mode = currentMode();
+            updateProofPanel({
+                mode: mode === "offline" ? "Offline" : "Online",
+                status: `Ready (${mode})`
+            });
+            addLog("SYS", `Processing mode switched to ${mode.toUpperCase()}`);
+        });
+
+        function updateProofPanel({ format, integrity, mode, layers, status, metrics }) {
+            if (format) document.getElementById("proofFormat").textContent = format;
+            if (integrity) document.getElementById("proofIntegrity").textContent = integrity;
+            if (mode) document.getElementById("proofMode").textContent = mode;
+            if (layers) document.getElementById("proofLayers").textContent = layers;
+            if (status) document.getElementById("proofStatus").textContent = status;
+            if (metrics) document.getElementById("proofMetrics").textContent = metrics;
         }
 
-        /* ========= CRYPTO UTILITIES (Client-Side) ========= */
-
-        // Derive AES-GCM key from password using SHA-256
-        async function deriveKey(password) {
-            const encoder = new TextEncoder();
-            const keyMaterial = encoder.encode(password);
-
-            // Hash the password with SHA-256 to get 32 bytes
-            const hashBuffer = await crypto.subtle.digest('SHA-256', keyMaterial);
-
-            // Import the hash as an AES-GCM key
-            return await crypto.subtle.importKey(
-                'raw',
-                hashBuffer,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt', 'decrypt']
-            );
+        async function sha256Hex(data) {
+            const buffer = await crypto.subtle.digest("SHA-256", data);
+            const bytes = new Uint8Array(buffer);
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
         }
 
-        // Encrypt data using AES-GCM (compatible with Python AESGCM)
-        async function encryptData(data, password) {
-            const key = await deriveKey(password);
+        async function sha256HexBytes(bytes) {
+            return sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+        }
 
-            // Generate random 12-byte nonce (same as Python's os.urandom(12))
-            const nonce = crypto.getRandomValues(new Uint8Array(12));
+        function bytesToBase64(bytes) {
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+        }
 
-            // Encrypt the data
-            const encrypted = await crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: nonce },
-                key,
-                data
-            );
+        function base64ToBytes(base64) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
 
-            // Concatenate nonce + encrypted data (same format as Python)
-            const result = new Uint8Array(nonce.length + encrypted.byteLength);
-            result.set(nonce, 0);
-            result.set(new Uint8Array(encrypted), nonce.length);
-
+        function concatBytes(...arrays) {
+            const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
+            const result = new Uint8Array(total);
+            let offset = 0;
+            for (const arr of arrays) {
+                result.set(arr, offset);
+                offset += arr.length;
+            }
             return result;
         }
 
-        // Decrypt data using AES-GCM (compatible with Python AESGCM)
-        async function decryptData(encryptedData, password) {
-            const key = await deriveKey(password);
-
-            // Extract nonce (first 12 bytes) and encrypted data
-            const nonce = encryptedData.slice(0, 12);
-            const data = encryptedData.slice(12);
-
-            // Decrypt the data
-            const decrypted = await crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: nonce },
-                key,
-                data
-            );
-
-            return new Uint8Array(decrypted);
+        function createHeaderBytes(metadataObj) {
+            const encoder = new TextEncoder();
+            const magic = encoder.encode(HEADER_MAGIC_V2);
+            const metadataBytes = encoder.encode(JSON.stringify(metadataObj));
+            const result = new Uint8Array(8 + metadataBytes.length);
+            result.set(magic, 0);
+            new DataView(result.buffer).setUint32(4, metadataBytes.length, false);
+            result.set(metadataBytes, 8);
+            return result;
         }
 
-        /* ========= ENCRYPT (Client-Side) ========= */
+        function parseEncryptedPackage(bytes) {
+            if (bytes.length < 8) throw new Error("Invalid encrypted file format");
+
+            const decoder = new TextDecoder();
+            const magic = decoder.decode(bytes.slice(0, 4));
+            if (magic !== HEADER_MAGIC_V2 && magic !== HEADER_MAGIC_LEGACY) {
+                throw new Error("Unsupported encrypted file format");
+            }
+
+            const metadataLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, false);
+            const metadataStart = 8;
+            const metadataEnd = metadataStart + metadataLength;
+            if (metadataEnd > bytes.length) throw new Error("Corrupted encrypted metadata");
+
+            const metadata = JSON.parse(decoder.decode(bytes.slice(metadataStart, metadataEnd)));
+
+            if (magic === HEADER_MAGIC_LEGACY) {
+                return { version: "SV01", metadata, ciphertext: bytes.slice(metadataEnd) };
+            }
+
+            const wrappedKeyLen = Number(metadata.wrapped_key_len || 0);
+            const macLen = Number(metadata.mac_len || MAC_LENGTH);
+            if (wrappedKeyLen <= 0 || macLen <= 0 || bytes.length < metadataEnd + wrappedKeyLen + macLen) {
+                throw new Error("Corrupted encrypted payload");
+            }
+
+            const bodyEnd = bytes.length - macLen;
+            const body = bytes.slice(metadataEnd, bodyEnd);
+            return {
+                version: "SV02",
+                metadata,
+                wrappedKey: body.slice(0, wrappedKeyLen),
+                ciphertext: body.slice(wrappedKeyLen),
+                mac: bytes.slice(bodyEnd),
+                packageWithoutMac: bytes.slice(0, bodyEnd)
+            };
+        }
+
+        async function deriveAesKey(password, salt, iterations = PBKDF2_ITERATIONS) {
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                new TextEncoder().encode(password),
+                "PBKDF2",
+                false,
+                ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function deriveKeyBytes(password, salt, iterations = PBKDF2_ITERATIONS, length = 32) {
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                new TextEncoder().encode(password),
+                "PBKDF2",
+                false,
+                ["deriveBits"]
+            );
+            const bits = await crypto.subtle.deriveBits(
+                { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+                keyMaterial,
+                length * 8
+            );
+            return new Uint8Array(bits);
+        }
+
+        async function importRawAesKey(rawKey) {
+            return crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+        }
+
+        async function hmacSha256(keyBytes, messageBytes) {
+            const key = await crypto.subtle.importKey(
+                "raw",
+                keyBytes,
+                { name: "HMAC", hash: "SHA-256" },
+                false,
+                ["sign"]
+            );
+            return new Uint8Array(await crypto.subtle.sign("HMAC", key, messageBytes));
+        }
+
+        async function verifyHmacSha256(keyBytes, messageBytes, macBytes) {
+            const key = await crypto.subtle.importKey(
+                "raw",
+                keyBytes,
+                { name: "HMAC", hash: "SHA-256" },
+                false,
+                ["verify"]
+            );
+            return crypto.subtle.verify("HMAC", key, macBytes, messageBytes);
+        }
+
+        function requestWithUploadProgress(url, file, password, scope) {
+            return new Promise((resolve, reject) => {
+                const form = new FormData();
+                form.append("file", file);
+                form.append("key", password);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", url);
+                xhr.responseType = "blob";
+
+                let lastLoggedPercent = -10;
+                addLog(scope, `Upload started for ${file.name} (${file.size} bytes)`);
+
+                xhr.upload.onprogress = (event) => {
+                    if (!event.lengthComputable) return;
+                    const percent = Math.floor((event.loaded / event.total) * 100);
+                    if (percent >= lastLoggedPercent + 10 || percent === 100) {
+                        lastLoggedPercent = percent;
+                        addLog(scope, `Upload progress: ${percent}% (${event.loaded}/${event.total} bytes)`);
+                    }
+                };
+
+                xhr.onload = async () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        addLog(scope, `Upload complete. Server responded with status ${xhr.status}`);
+                        resolve({
+                            blob: xhr.response,
+                            contentDisposition: xhr.getResponseHeader("Content-Disposition"),
+                            contentType: xhr.getResponseHeader("Content-Type")
+                        });
+                        return;
+                    }
+
+                    let errorMessage = `Request failed with status ${xhr.status}`;
+                    try {
+                        if (xhr.response) {
+                            const text = await xhr.response.text();
+                            if (text) errorMessage = text;
+                        }
+                    } catch {
+                    }
+                    reject(new Error(errorMessage));
+                };
+
+                xhr.onerror = () => reject(new Error("Network error during file upload"));
+                xhr.send(form);
+            });
+        }
+
+        async function encryptDataOffline(data, password, filename, mimeType) {
+            addLog("ENC", "Step 1/9: Initializing offline encryption context");
+            const saltKek = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+            const saltMac = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+            const nonceData = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+            const nonceWrap = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+            addLog("ENC", "Step 2/9: Generated salts and nonces");
+
+            addLog("ENC", "Step 3/9: Deriving KEK and MAC keys using PBKDF2");
+            const kek = await deriveAesKey(password, saltKek);
+            const macKey = await deriveKeyBytes(password, saltMac);
+            const dataKey = crypto.getRandomValues(new Uint8Array(DATA_KEY_LENGTH));
+            const dataAesKey = await importRawAesKey(dataKey);
+            addLog("ENC", "Step 4/9: Prepared random data key for payload encryption");
+
+            addLog("ENC", "Step 5/9: Encrypting payload with AES-GCM data key");
+            const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonceData }, dataAesKey, data));
+            addLog("ENC", "Step 6/9: Wrapping data key with KEK (AES-GCM)");
+            const wrappedKey = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonceWrap }, kek, dataKey));
+
+            addLog("ENC", "Step 7/9: Computing file/ciphertext/wrapped-key hashes");
+            const fileHash = await sha256Hex(data);
+            const ciphertextHash = await sha256HexBytes(encrypted);
+            const wrappedKeyHash = await sha256HexBytes(wrappedKey);
+
+            const metadata = {
+                format: "SV02-multilevel",
+                algorithm: "AES-256-GCM (Layered)",
+                kdf: "PBKDF2-HMAC-SHA256",
+                kdf_iterations: PBKDF2_ITERATIONS,
+                salt_kek: bytesToBase64(saltKek),
+                salt_mac: bytesToBase64(saltMac),
+                nonce_data: bytesToBase64(nonceData),
+                nonce_wrap: bytesToBase64(nonceWrap),
+                wrapped_key_len: wrappedKey.length,
+                mac_len: MAC_LENGTH,
+                file_hash_sha256: fileHash,
+                ciphertext_hash_sha256: ciphertextHash,
+                wrapped_key_hash_sha256: wrappedKeyHash,
+                filename,
+                mime_type: mimeType || "application/octet-stream",
+                created_at: new Date().toISOString()
+            };
+
+            const header = createHeaderBytes(metadata);
+            const packageWithoutMac = concatBytes(header, wrappedKey, encrypted);
+            addLog("ENC", "Step 8/9: Generating HMAC authentication tag");
+            const packageMac = await hmacSha256(macKey, packageWithoutMac);
+            const payload = concatBytes(packageWithoutMac, packageMac);
+
+            addLog("ENC", `Step 9/9: Offline package ready (${payload.length} bytes)`);
+
+            return { payload, metadata };
+        }
+
+        async function decryptDataOffline(encryptedData, password) {
+            addLog("DEC", "Step 1/10: Parsing encrypted package header and metadata");
+            const parsed = parseEncryptedPackage(encryptedData);
+
+            if (parsed.version === "SV01") {
+                const { metadata, ciphertext } = parsed;
+                addLog("DEC", "Detected legacy SV01 package");
+                addLog("DEC", "Step 2/10: Deriving legacy AES key from PBKDF2");
+                const salt = base64ToBytes(metadata.salt);
+                const nonce = base64ToBytes(metadata.nonce);
+                const key = await deriveAesKey(password, salt, Number(metadata.kdf_iterations || PBKDF2_ITERATIONS));
+                addLog("DEC", "Step 3/10: Decrypting legacy ciphertext");
+                const plain = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, key, ciphertext));
+
+                addLog("DEC", "Step 4/10: Validating legacy plaintext hash");
+                const fileHash = await sha256HexBytes(plain);
+                if (metadata.file_hash_sha256 && metadata.file_hash_sha256 !== fileHash) {
+                    throw new Error("Integrity verification failed: file hash mismatch");
+                }
+                addLog("DEC", "Legacy package decrypted and verified");
+
+                metadata.format = "SV01-legacy";
+                return {
+                    blob: new Blob([plain], { type: metadata.mime_type || "application/octet-stream" }),
+                    filename: metadata.filename || "decrypted_file",
+                    mimeType: metadata.mime_type || "application/octet-stream",
+                    metadata,
+                    fileHash,
+                    hmacVerified: false
+                };
+            }
+
+            const { metadata, wrappedKey, ciphertext, mac, packageWithoutMac } = parsed;
+            const iterations = Number(metadata.kdf_iterations || PBKDF2_ITERATIONS);
+            const saltKek = base64ToBytes(metadata.salt_kek);
+            const saltMac = base64ToBytes(metadata.salt_mac);
+            const nonceData = base64ToBytes(metadata.nonce_data);
+            const nonceWrap = base64ToBytes(metadata.nonce_wrap);
+
+            addLog("DEC", "Step 2/10: Deriving KEK and MAC keys via PBKDF2");
+            const kek = await deriveAesKey(password, saltKek, iterations);
+            const macKey = await deriveKeyBytes(password, saltMac, iterations);
+
+            addLog("DEC", "Step 3/10: Verifying HMAC authentication tag");
+            const hmacValid = await verifyHmacSha256(macKey, packageWithoutMac, mac);
+            if (!hmacValid) throw new Error("Integrity verification failed: HMAC mismatch");
+            addLog("DEC", "Step 4/10: HMAC verification passed");
+
+            addLog("DEC", "Step 5/10: Unwrapping random data key using KEK");
+            const dataKeyRaw = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonceWrap }, kek, wrappedKey));
+            const dataAesKey = await importRawAesKey(dataKeyRaw);
+            addLog("DEC", "Step 6/10: Decrypting payload with unwrapped data key");
+            const plain = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonceData }, dataAesKey, ciphertext));
+
+            addLog("DEC", "Step 7/10: Validating plaintext hash");
+            const fileHash = await sha256HexBytes(plain);
+            if (metadata.file_hash_sha256 && metadata.file_hash_sha256 !== fileHash) {
+                throw new Error("Integrity verification failed: file hash mismatch");
+            }
+
+            addLog("DEC", "Step 8/10: Validating ciphertext hash");
+            const ciphertextHash = await sha256HexBytes(ciphertext);
+            if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
+                throw new Error("Integrity verification failed: ciphertext hash mismatch");
+            }
+
+            addLog("DEC", "Step 9/10: Validating wrapped key hash");
+            const wrappedKeyHash = await sha256HexBytes(wrappedKey);
+            if (metadata.wrapped_key_hash_sha256 && metadata.wrapped_key_hash_sha256 !== wrappedKeyHash) {
+                throw new Error("Integrity verification failed: wrapped key hash mismatch");
+            }
+            addLog("DEC", "Step 10/10: Offline decryption and verification complete");
+
+            return {
+                blob: new Blob([plain], { type: metadata.mime_type || "application/octet-stream" }),
+                filename: metadata.filename || "decrypted_file",
+                mimeType: metadata.mime_type || "application/octet-stream",
+                metadata,
+                fileHash,
+                hmacVerified: true
+            };
+        }
+
+        async function encryptDataOnline(file, password) {
+            addLog("ENC", "Step 1/4: Building online encryption request payload");
+            addLog("ENC", "Step 2/4: Sending request to /encrypt with upload progress tracking");
+            const response = await requestWithUploadProgress("/encrypt", file, password, "ENC");
+
+            addLog("ENC", "Step 3/4: Reading encrypted response payload");
+            const blob = response.blob;
+            const nameFromHeader = getFilenameFromDisposition(response.contentDisposition);
+            addLog("ENC", "Step 4/4: Online encryption response received");
+            return { payload: blob, filename: nameFromHeader || `${file.name}.enc` };
+        }
+
+        async function decryptDataOnline(encFile, password) {
+            addLog("DEC", "Step 1/4: Building online decryption request payload");
+            addLog("DEC", "Step 2/4: Sending request to /decrypt with upload progress tracking");
+            const response = await requestWithUploadProgress("/decrypt", encFile, password, "DEC");
+
+            addLog("DEC", "Step 3/4: Reading decrypted response payload");
+            const blob = response.blob;
+            const filename = getFilenameFromDisposition(response.contentDisposition) || "decrypted_file";
+            const mimeType = blob.type || response.contentType || "application/octet-stream";
+            addLog("DEC", "Step 4/4: Online decryption response received");
+
+            return {
+                blob,
+                filename,
+                mimeType,
+                metadata: { format: "server-decrypt", filename, mime_type: mimeType },
+                hmacVerified: true
+            };
+        }
+
+        function getFilenameFromDisposition(disposition) {
+            if (!disposition) return null;
+            const utf = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utf && utf[1]) return decodeURIComponent(utf[1]);
+            const ascii = disposition.match(/filename="?([^";]+)"?/i);
+            return ascii && ascii[1] ? ascii[1] : null;
+        }
+
+        function downloadBlob(blob, filename) {
+            addLog("SYS", `Preparing browser download: ${filename}`);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
 
         async function encryptAndDownload() {
             const status = document.getElementById("encStatus");
-            addLog("encLogBox", "🔐 Client-side encryption started");
-
-            const file = document.getElementById("plainVideo").files[0];
+            const file = document.getElementById("plainFile").files[0];
             const key = document.getElementById("encKey").value;
+            const mode = currentMode();
 
             if (!file || !key) {
-                addLog("encLogBox", "❌ Missing video or key");
-                status.textContent = "Please select video and enter key";
-                status.style.color = "#fca5a5";
+                status.textContent = "Please select a file and enter encryption key";
+                status.className = "status err";
                 return;
             }
 
-            addLog("encLogBox", `📁 File: ${file.name}`);
-            addLog("encLogBox", `📦 Size: ${file.size} bytes`);
-            addLog("encLogBox", "🔑 Deriving encryption key from password");
-
             try {
-                // Read file as ArrayBuffer
-                addLog("encLogBox", "📖 Reading video file");
-                const arrayBuffer = await file.arrayBuffer();
+                const start = performance.now();
+                addLog("ENC", `Started ${mode.toUpperCase()} encryption for ${file.name} (${file.size} bytes)`);
+                addLog("ENC", `Input MIME type: ${file.type || "unknown"}`);
 
-                // Encrypt on client side
-                addLog("encLogBox", "🔐 Encrypting video (this may take a moment for large files)");
-                const encrypted = await encryptData(arrayBuffer, key);
+                if (mode === "offline") {
+                    addLog("ENC", "Reading selected file into memory");
+                    const arrayBuffer = await file.arrayBuffer();
+                    const { payload, metadata } = await encryptDataOffline(arrayBuffer, key, file.name, file.type);
+                    downloadBlob(new Blob([payload], { type: "application/octet-stream" }), `${file.name}.enc`);
 
-                addLog("encLogBox", "✅ Encryption completed");
-                addLog("encLogBox", `📦 Encrypted size: ${encrypted.length} bytes`);
-                addLog("encLogBox", "⬇ Preparing download");
+                    const elapsed = (performance.now() - start) / 1000;
+                    const throughput = (file.size / (1024 * 1024)) / Math.max(elapsed, 0.001);
+                    updateProofPanel({
+                        format: metadata.format,
+                        integrity: "Multilevel integrity metadata generated",
+                        mode: "Offline",
+                        layers: "3 Layers",
+                        status: "Encryption complete",
+                        metrics: `${elapsed.toFixed(2)}s | ${throughput.toFixed(2)} MB/s`
+                    });
+                    status.textContent = "Encryption complete (offline). Download started.";
+                    status.className = "status ok";
+                    addLog("ENC", "Offline encryption successful");
+                } else {
+                    addLog("ENC", "Using server-side encryption API");
+                    const { payload, filename } = await encryptDataOnline(file, key);
+                    downloadBlob(payload, filename);
 
-                // Create blob and download
-                const blob = new Blob([encrypted], { type: 'application/octet-stream' });
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "video.enc";
-                a.click();
-
-                addLog("encLogBox", "✅ Encrypted file download completed");
-                addLog("encLogBox", "💾 No data was uploaded to server!");
-
-                status.textContent = "✅ Encryption successful (Client-Side)";
-                status.style.color = "#86efac";
-            } catch (e) {
-                addLog("encLogBox", `❌ ${e.message}`);
-                status.textContent = e.message;
-                status.style.color = "#fca5a5";
+                    const elapsed = (performance.now() - start) / 1000;
+                    updateProofPanel({
+                        format: "SV02 (Server API)",
+                        integrity: "Server-side package generated",
+                        mode: "Online",
+                        layers: "3 Layers",
+                        status: "Encryption complete",
+                        metrics: `${elapsed.toFixed(2)}s`
+                    });
+                    status.textContent = "Encryption complete (online). Download started.";
+                    status.className = "status ok";
+                    addLog("ENC", "Online encryption successful");
+                }
+            } catch (err) {
+                updateProofPanel({ status: "Encryption failed" });
+                status.textContent = err.message;
+                status.className = "status err";
+                addLog("ENC", `Failed: ${err.message}`);
             }
         }
 
-        /* ========= DECRYPT (Client-Side) ========= */
-
-        async function decryptFile() {
-            addLog("decLogBox", "🔓 Client-side decryption started");
-
-            const file = document.getElementById("encFile").files[0];
+        async function decryptFileForUse() {
+            const encFile = document.getElementById("encFile").files[0];
             const key = document.getElementById("decKey").value;
+            const mode = currentMode();
 
-            if (!file || !key) throw new Error("Missing encrypted file or key");
+            if (!encFile || !key) throw new Error("Please select encrypted file and enter decryption key");
 
-            addLog("decLogBox", `📁 Encrypted file: ${file.name}`);
-            addLog("decLogBox", `📦 Size: ${file.size} bytes`);
-            addLog("decLogBox", "🔑 Deriving decryption key from password");
+            addLog("DEC", `Started ${mode.toUpperCase()} decryption for ${encFile.name}`);
+            addLog("DEC", `Encrypted input size: ${encFile.size} bytes`);
 
-            // Read file as ArrayBuffer
-            addLog("decLogBox", "📖 Reading encrypted file");
-            const arrayBuffer = await file.arrayBuffer();
-            const encryptedData = new Uint8Array(arrayBuffer);
-
-            // Decrypt on client side
-            addLog("decLogBox", "🔓 Decrypting video (this may take a moment for large files)");
-            const decrypted = await decryptData(encryptedData, key);
-
-            addLog("decLogBox", "✅ Decryption completed");
-            addLog("decLogBox", `📦 Decrypted size: ${decrypted.length} bytes`);
-            addLog("decLogBox", "💾 No data was uploaded to server!");
-
-            return new Blob([decrypted], { type: 'video/mp4' });
-        }
-
-        async function decryptAndPlay() {
-            const status = document.getElementById("status");
-            addLog("decLogBox", "▶ Play clicked");
-
-            try {
-                const blob = await decryptFile();
-                document.getElementById("videoPlayer").src = URL.createObjectURL(blob);
-                addLog("decLogBox", "▶ Playback started");
-
-                status.textContent = "▶ Playing video (Client-Side Decryption)";
-                status.style.color = "#86efac";
-            } catch (e) {
-                addLog("decLogBox", `❌ ${e.message}`);
-                status.textContent = e.message;
-                status.style.color = "#fca5a5";
+            if (mode === "offline") {
+                addLog("DEC", "Reading encrypted file into memory");
+                const data = new Uint8Array(await encFile.arrayBuffer());
+                return decryptDataOffline(data, key);
             }
+
+            addLog("DEC", "Using server-side decryption API");
+            return decryptDataOnline(encFile, key);
         }
 
         async function decryptAndDownload() {
-            const status = document.getElementById("status");
-            addLog("decLogBox", "⬇ Download clicked");
-
+            const status = document.getElementById("decStatus");
             try {
-                const blob = await decryptFile();
-                addLog("decLogBox", "⬇ Downloading decrypted video");
+                const start = performance.now();
+                const result = await decryptFileForUse();
+                addLog("DEC", `Decryption output: ${result.filename} (${result.mimeType}, ${result.blob.size} bytes)`);
+                downloadBlob(result.blob, result.filename);
 
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "decrypted_video.mp4";
-                a.click();
+                const elapsed = (performance.now() - start) / 1000;
+                updateProofPanel({
+                    format: result.metadata?.format || "decrypted",
+                    integrity: result.hmacVerified ? "HMAC/SHA-256 verified" : "SHA-256 verified (legacy)",
+                    status: "Decryption complete",
+                    metrics: `${elapsed.toFixed(2)}s`
+                });
 
-                addLog("decLogBox", "✅ Decrypted video download completed");
-
-                status.textContent = "⬇ Downloaded video (Client-Side Decryption)";
-                status.style.color = "#86efac";
-            } catch (e) {
-                addLog("decLogBox", `❌ ${e.message}`);
-                status.textContent = e.message;
-                status.style.color = "#fca5a5";
+                status.textContent = "Decryption complete. Download started.";
+                status.className = "status ok";
+                addLog("DEC", `Download ready: ${result.filename}`);
+            } catch (err) {
+                status.textContent = err.message;
+                status.className = "status err";
+                updateProofPanel({ status: "Decryption failed" });
+                addLog("DEC", `Failed: ${err.message}`);
             }
         }
-    </script>
 
+        function resetPreview() {
+            addLog("PRV", "Resetting preview widgets");
+            document.getElementById("previewShell").classList.add("preview-hidden");
+            document.getElementById("previewImage").style.display = "none";
+            document.getElementById("previewVideo").style.display = "none";
+            document.getElementById("previewAudio").style.display = "none";
+            document.getElementById("previewText").style.display = "none";
+            document.getElementById("previewPdf").style.display = "none";
+            document.getElementById("previewPlaceholder").style.display = "block";
+        }
+
+        async function renderPreview(blob, filename, mimeType) {
+            resetPreview();
+            const safeType = mimeType || "application/octet-stream";
+            addLog("PRV", `Preview dispatch for ${filename} with MIME ${safeType}`);
+            document.getElementById("previewShell").classList.remove("preview-hidden");
+            document.getElementById("previewMeta").textContent = `File: ${filename} | MIME: ${safeType} | Size: ${blob.size} bytes`;
+
+            const url = URL.createObjectURL(blob);
+            const image = document.getElementById("previewImage");
+            const video = document.getElementById("previewVideo");
+            const audio = document.getElementById("previewAudio");
+            const text = document.getElementById("previewText");
+            const pdf = document.getElementById("previewPdf");
+            const placeholder = document.getElementById("previewPlaceholder");
+
+            if (safeType.startsWith("image/")) {
+                image.src = url;
+                image.style.display = "block";
+                placeholder.style.display = "none";
+                addLog("PRV", "Rendered image preview");
+                return;
+            }
+            if (safeType.startsWith("video/")) {
+                video.src = url;
+                video.style.display = "block";
+                placeholder.style.display = "none";
+                addLog("PRV", "Rendered video preview");
+                return;
+            }
+            if (safeType.startsWith("audio/")) {
+                audio.src = url;
+                audio.style.display = "block";
+                placeholder.style.display = "none";
+                addLog("PRV", "Rendered audio preview");
+                return;
+            }
+            if (safeType === "application/pdf") {
+                pdf.src = url;
+                pdf.style.display = "block";
+                placeholder.style.display = "none";
+                addLog("PRV", "Rendered PDF preview");
+                return;
+            }
+
+            const looksText = safeType.startsWith("text/") || mimeTextLike.has(safeType) || filename.match(/\.(txt|md|json|csv|xml|log|py|js|html|css)$/i);
+            if (looksText) {
+                addLog("PRV", "Detected text-like content, reading blob as text");
+                const content = await blob.text();
+                text.textContent = content.slice(0, 10000);
+                text.style.display = "block";
+                placeholder.style.display = "none";
+                addLog("PRV", `Rendered text preview (${Math.min(content.length, 10000)} chars shown)`);
+                return;
+            }
+
+            document.getElementById("previewMeta").textContent += " | Preview not supported for this type.";
+            addLog("PRV", "Preview not supported for this MIME type");
+        }
+
+        async function decryptAndPreview() {
+            const status = document.getElementById("decStatus");
+            try {
+                const result = await decryptFileForUse();
+                await renderPreview(result.blob, result.filename, result.mimeType);
+
+                updateProofPanel({
+                    format: result.metadata?.format || "decrypted",
+                    integrity: result.hmacVerified ? "HMAC/SHA-256 verified" : "SHA-256 verified (legacy)",
+                    status: "Preview generated"
+                });
+
+                status.textContent = "Preview generated for supported file type.";
+                status.className = "status ok";
+                addLog("DEC", `Preview generated: ${result.filename} (${result.mimeType})`);
+            } catch (err) {
+                status.textContent = err.message;
+                status.className = "status err";
+                addLog("DEC", `Preview failed: ${err.message}`);
+            }
+        }
+
+        async function verifyEncryptedPackage() {
+            const status = document.getElementById("decStatus");
+            const file = document.getElementById("encFile").files[0];
+            if (!file) {
+                status.textContent = "Please select an encrypted file to verify";
+                status.className = "status err";
+                return;
+            }
+
+            try {
+                const start = performance.now();
+                addLog("VFY", `Step 1/4: Parsing encrypted package for ${file.name}`);
+                const parsed = parseEncryptedPackage(new Uint8Array(await file.arrayBuffer()));
+                const { metadata, ciphertext } = parsed;
+                addLog("VFY", "Step 2/4: Validating ciphertext hash");
+                const ciphertextHash = await sha256HexBytes(ciphertext);
+
+                if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
+                    throw new Error("Ciphertext hash mismatch");
+                }
+
+                let hmacNote = "Not checked";
+                const key = document.getElementById("decKey").value;
+                if (parsed.version === "SV02" && key) {
+                    addLog("VFY", "Step 3/4: Verifying HMAC with provided key");
+                    const saltMac = base64ToBytes(metadata.salt_mac);
+                    const macKey = await deriveKeyBytes(key, saltMac, Number(metadata.kdf_iterations || PBKDF2_ITERATIONS));
+                    const ok = await verifyHmacSha256(macKey, parsed.packageWithoutMac, parsed.mac);
+                    if (!ok) throw new Error("HMAC mismatch (wrong key or tampered file)");
+                    hmacNote = "Verified";
+                }
+
+                const elapsed = (performance.now() - start) / 1000;
+                addLog("VFY", "Step 4/4: Package verification complete");
+                updateProofPanel({
+                    format: metadata.format || parsed.version,
+                    integrity: `Offline package verification passed (${hmacNote})`,
+                    mode: currentMode() === "offline" ? "Offline" : "Online",
+                    status: "Verification complete",
+                    metrics: `${elapsed.toFixed(2)}s`
+                });
+
+                status.textContent = "Offline package verification successful.";
+                status.className = "status ok";
+                addLog("DEC", `Offline verify passed for ${file.name} (${hmacNote})`);
+            } catch (err) {
+                status.textContent = err.message;
+                status.className = "status err";
+                updateProofPanel({ status: "Verification failed" });
+                addLog("DEC", `Offline verify failed: ${err.message}`);
+            }
+        }
+
+        async function addLog(scope, message) {
+            if (!logsEnabled) return;
+
+            const box = document.getElementById("logsBox");
+            const time = new Date().toLocaleTimeString();
+            const payload = new TextEncoder().encode(`${lastLogHash}|${time}|${scope}|${message}`);
+            const hash = await sha256Hex(payload);
+            const line = `[${time}] [${scope}] [h:${hash.slice(0, 10)} prev:${lastLogHash.slice(0, 10)}] ${message}\n`;
+            box.textContent += line;
+            box.scrollTop = box.scrollHeight;
+            lastLogHash = hash;
+        }
+
+        function toggleLogging() {
+            logsEnabled = !logsEnabled;
+            const btn = document.getElementById("toggleLogsBtn");
+            btn.textContent = logsEnabled ? "Turn Off Logs" : "Turn On Logs";
+            if (logsEnabled) {
+                addLog("SYS", "Logging enabled");
+            }
+        }
+
+        function loadSelectedDiagram() {
+            const selected = document.getElementById("diagramSelect").value;
+            const image = document.getElementById("diagramImage");
+
+            if (selected === "full") {
+                image.style.height = "720px";
+                image.style.maxHeight = "85vh";
+            } else {
+                image.style.height = "480px";
+                image.style.maxHeight = "60vh";
+            }
+
+            image.src = `/diagram/${selected}`;
+            addLog("SYS", `Diagram selected: ${selected}`);
+        }
+
+        function toggleDiagramPanel() {
+            const shell = document.getElementById("diagramShell");
+            const btn = document.getElementById("toggleDiagramBtn");
+            const hidden = shell.classList.contains("preview-hidden");
+
+            if (hidden) {
+                loadSelectedDiagram();
+                shell.classList.remove("preview-hidden");
+                btn.textContent = "Hide Diagram";
+                addLog("SYS", "Architecture diagram panel opened");
+            } else {
+                shell.classList.add("preview-hidden");
+                btn.textContent = "Show Diagram";
+                addLog("SYS", "Architecture diagram panel hidden");
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById("logsBox").textContent = "";
+            lastLogHash = "GENESIS";
+            if (logsEnabled) addLog("SYS", "Logs cleared");
+        }
+
+        addLog("SYS", "Interface initialized");
+    </script>
 </body>
 
 </html>
