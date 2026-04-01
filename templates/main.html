@@ -1118,6 +1118,15 @@
         function loadSelectedDiagram() {
             const selected = document.getElementById("diagramSelect").value;
             const image = document.getElementById("diagramImage");
+
+            if (selected === "full") {
+                image.style.height = "720px";
+                image.style.maxHeight = "85vh";
+            } else {
+                image.style.height = "480px";
+                image.style.maxHeight = "60vh";
+            }
+
             image.src = `/diagram/${selected}`;
             addLog("SYS", `Diagram selected: ${selected}`);
         }
