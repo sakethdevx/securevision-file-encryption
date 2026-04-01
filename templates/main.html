@@ -175,10 +175,10 @@
         <div class="proof-panel">
             <h2>🔍 Cryptographic Proof Panel</h2>
             <ul>
-                <li>✔ Encryption Algorithm: <span id="proofAlgo">AES-256-GCM</span></li>
-                <li>✔ Key Derivation: <span id="proofKdf">PBKDF2-HMAC-SHA256 (150000 iterations)</span></li>
+                <li>✔ Encryption Algorithm: <span id="proofAlgo">Layered AES-256-GCM (Data + Key Wrap)</span></li>
+                <li>✔ Key Derivation: <span id="proofKdf">PBKDF2-HMAC-SHA256 (Dual-Salt, 150000 iterations)</span></li>
                 <li>✔ Integrity Check: <span id="proofIntegrity">SHA-256 Pending</span></li>
-                <li>✔ Audit Chain: <span id="proofChain">SHA-256 Hash Chain Active</span></li>
+                <li>✔ Authentication: <span id="proofChain">HMAC-SHA256 + Hash-Chain Logs</span></li>
                 <li>✔ Status: <span id="proofStatus" class="proof-secure">Secure ✅</span></li>
                 <li>✔ Metrics: <span id="proofMetrics">Waiting for operation</span></li>
             </ul>
@@ -231,7 +231,10 @@
         const PBKDF2_ITERATIONS = 150000;
         const SALT_LENGTH = 16;
         const NONCE_LENGTH = 12;
-        const HEADER_MAGIC = "SV01";
+        const HEADER_MAGIC_V2 = "SV02";
+        const HEADER_MAGIC_LEGACY = "SV01";
+        const DATA_KEY_LENGTH = 32;
+        const MAC_LENGTH = 32;
 
         const logState = {
             encLogBox: { lastHash: "GENESIS", queue: Promise.resolve() },
@@ -252,7 +255,7 @@
             }
         }
 
-        function updateVerificationDetails({ mode, metadata, ciphertextHash, fileHash, sourceFile }) {
+        function updateVerificationDetails({ mode, metadata, ciphertextHash, fileHash, sourceFile, wrappedKeyHash, hmacStatus }) {
             const box = document.getElementById("verifyDetails");
             const title = document.getElementById("verifyDetailsTitle");
             const content = document.getElementById("verifyDetailsContent");
@@ -266,6 +269,9 @@
                 `Created At: ${metadata.created_at || "N/A"}`,
                 `Expected Ciphertext Hash: ${metadata.ciphertext_hash_sha256 || "N/A"}`,
                 `Computed Ciphertext Hash: ${ciphertextHash || "N/A"}`,
+                `Expected Wrapped Key Hash: ${metadata.wrapped_key_hash_sha256 || "N/A"}`,
+                `Computed Wrapped Key Hash: ${wrappedKeyHash || "N/A"}`,
+                `HMAC Verification: ${hmacStatus || "N/A"}`,
                 `Expected File Hash: ${metadata.file_hash_sha256 || "N/A"}`,
                 `Computed File Hash: ${fileHash || "N/A"}`
             ];
@@ -279,6 +285,10 @@
             const buffer = await crypto.subtle.digest("SHA-256", data);
             const bytes = new Uint8Array(buffer);
             return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+        }
+
+        async function sha256HexBytes(bytes) {
+            return sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
         }
 
         function bytesToBase64(bytes) {
@@ -302,13 +312,24 @@
 
         function createHeaderBytes(metadataObj) {
             const encoder = new TextEncoder();
-            const magic = encoder.encode(HEADER_MAGIC);
+            const magic = encoder.encode(HEADER_MAGIC_V2);
             const metadataBytes = encoder.encode(JSON.stringify(metadataObj));
             const result = new Uint8Array(8 + metadataBytes.length);
             result.set(magic, 0);
             const view = new DataView(result.buffer);
             view.setUint32(4, metadataBytes.length, false);
             result.set(metadataBytes, 8);
+            return result;
+        }
+
+        function concatBytes(...arrays) {
+            const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
+            const result = new Uint8Array(total);
+            let offset = 0;
+            for (const arr of arrays) {
+                result.set(arr, offset);
+                offset += arr.length;
+            }
             return result;
         }
 
@@ -319,7 +340,7 @@
 
             const decoder = new TextDecoder();
             const magic = decoder.decode(bytes.slice(0, 4));
-            if (magic !== HEADER_MAGIC) {
+            if (magic !== HEADER_MAGIC_V2 && magic !== HEADER_MAGIC_LEGACY) {
                 throw new Error("Unsupported encrypted file format");
             }
 
@@ -334,9 +355,27 @@
 
             const metadataText = decoder.decode(bytes.slice(metadataStart, metadataEnd));
             const metadata = JSON.parse(metadataText);
-            const ciphertext = bytes.slice(metadataEnd);
 
-            return { metadata, ciphertext };
+            if (magic === HEADER_MAGIC_LEGACY) {
+                const ciphertext = bytes.slice(metadataEnd);
+                return { version: "SV01", metadata, ciphertext };
+            }
+
+            const wrappedKeyLen = Number(metadata.wrapped_key_len || 0);
+            const macLen = Number(metadata.mac_len || MAC_LENGTH);
+
+            if (wrappedKeyLen <= 0 || macLen <= 0 || bytes.length < metadataEnd + wrappedKeyLen + macLen) {
+                throw new Error("Corrupted encrypted payload");
+            }
+
+            const bodyEnd = bytes.length - macLen;
+            const body = bytes.slice(metadataEnd, bodyEnd);
+            const wrappedKey = body.slice(0, wrappedKeyLen);
+            const ciphertext = body.slice(wrappedKeyLen);
+            const mac = bytes.slice(bodyEnd);
+            const packageWithoutMac = bytes.slice(0, bodyEnd);
+
+            return { version: "SV02", metadata, wrappedKey, ciphertext, mac, packageWithoutMac };
         }
 
         function addLog(boxId, message) {
@@ -364,7 +403,7 @@
             box.style.display = isHidden ? "block" : "none";
         }
 
-        async function deriveKey(password, salt, iterations = PBKDF2_ITERATIONS) {
+        async function deriveAesKey(password, salt, iterations = PBKDF2_ITERATIONS) {
             const encoder = new TextEncoder();
             const keyMaterial = await crypto.subtle.importKey(
                 "raw",
@@ -388,65 +427,200 @@
             );
         }
 
+        async function deriveKeyBytes(password, salt, iterations = PBKDF2_ITERATIONS, length = 32) {
+            const encoder = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                encoder.encode(password),
+                "PBKDF2",
+                false,
+                ["deriveBits"]
+            );
+
+            const bits = await crypto.subtle.deriveBits(
+                {
+                    name: "PBKDF2",
+                    salt,
+                    iterations,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                length * 8
+            );
+            return new Uint8Array(bits);
+        }
+
+        async function importRawAesKey(rawKey) {
+            return crypto.subtle.importKey(
+                "raw",
+                rawKey,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function hmacSha256(keyBytes, messageBytes) {
+            const key = await crypto.subtle.importKey(
+                "raw",
+                keyBytes,
+                { name: "HMAC", hash: "SHA-256" },
+                false,
+                ["sign", "verify"]
+            );
+            const signature = await crypto.subtle.sign("HMAC", key, messageBytes);
+            return new Uint8Array(signature);
+        }
+
+        async function verifyHmacSha256(keyBytes, messageBytes, macBytes) {
+            const key = await crypto.subtle.importKey(
+                "raw",
+                keyBytes,
+                { name: "HMAC", hash: "SHA-256" },
+                false,
+                ["verify"]
+            );
+            return crypto.subtle.verify("HMAC", key, macBytes, messageBytes);
+        }
+
         async function encryptData(data, password, filename) {
-            const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
-            const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
-            const key = await deriveKey(password, salt, PBKDF2_ITERATIONS);
+            const saltKek = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+            const saltMac = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+            const nonceData = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+            const nonceWrap = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+            const kek = await deriveAesKey(password, saltKek, PBKDF2_ITERATIONS);
+            const macKey = await deriveKeyBytes(password, saltMac, PBKDF2_ITERATIONS, DATA_KEY_LENGTH);
+
+            const dataKey = crypto.getRandomValues(new Uint8Array(DATA_KEY_LENGTH));
+            const dataAesKey = await importRawAesKey(dataKey);
             const fileHash = await sha256Hex(data);
 
             const encrypted = await crypto.subtle.encrypt(
-                { name: "AES-GCM", iv: nonce },
-                key,
+                { name: "AES-GCM", iv: nonceData },
+                dataAesKey,
                 data
             );
             const encryptedBytes = new Uint8Array(encrypted);
-            const ciphertextHash = await sha256Hex(encryptedBytes.buffer);
+
+            const wrappedKeyBuffer = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: nonceWrap },
+                kek,
+                dataKey
+            );
+            const wrappedKey = new Uint8Array(wrappedKeyBuffer);
+
+            const ciphertextHash = await sha256HexBytes(encryptedBytes);
+            const wrappedKeyHash = await sha256HexBytes(wrappedKey);
 
             const metadata = {
-                algorithm: "AES-256-GCM",
+                format: "SV02-multilevel",
+                algorithm: "AES-256-GCM (Layered)",
+                layers: [
+                    "Layer 1: PBKDF2-HMAC-SHA256 key derivation",
+                    "Layer 2: AES-256-GCM data encryption with random data key",
+                    "Layer 3: AES-256-GCM key wrapping + HMAC-SHA256 package authentication"
+                ],
                 kdf: "PBKDF2-HMAC-SHA256",
                 kdf_iterations: PBKDF2_ITERATIONS,
-                salt: bytesToBase64(salt),
-                nonce: bytesToBase64(nonce),
+                salt_kek: bytesToBase64(saltKek),
+                salt_mac: bytesToBase64(saltMac),
+                nonce_data: bytesToBase64(nonceData),
+                nonce_wrap: bytesToBase64(nonceWrap),
+                wrapped_key_len: wrappedKey.length,
+                mac_len: MAC_LENGTH,
                 file_hash_sha256: fileHash,
                 ciphertext_hash_sha256: ciphertextHash,
+                wrapped_key_hash_sha256: wrappedKeyHash,
                 filename,
                 created_at: new Date().toISOString()
             };
 
             const header = createHeaderBytes(metadata);
-            const result = new Uint8Array(header.length + encryptedBytes.length);
-            result.set(header, 0);
-            result.set(encryptedBytes, header.length);
+            const packageWithoutMac = concatBytes(header, wrappedKey, encryptedBytes);
+            const packageMac = await hmacSha256(macKey, packageWithoutMac);
 
-            return { payload: result, fileHash, ciphertextHash };
+            const result = concatBytes(packageWithoutMac, packageMac);
+
+            return { payload: result, fileHash, ciphertextHash, wrappedKeyHash };
         }
 
         async function decryptData(encryptedData, password) {
-            const { metadata, ciphertext } = parseEncryptedPackage(encryptedData);
-            const ciphertextHash = await sha256Hex(ciphertext.buffer);
+            const parsed = parseEncryptedPackage(encryptedData);
+
+            if (parsed.version === "SV01") {
+                const { metadata, ciphertext } = parsed;
+                const ciphertextHash = await sha256HexBytes(ciphertext);
+                if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
+                    throw new Error("Integrity verification failed: encrypted payload hash mismatch");
+                }
+
+                const salt = base64ToBytes(metadata.salt);
+                const nonce = base64ToBytes(metadata.nonce);
+                const iterations = Number(metadata.kdf_iterations || PBKDF2_ITERATIONS);
+                const key = await deriveAesKey(password, salt, iterations);
+
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: nonce },
+                    key,
+                    ciphertext
+                );
+
+                const plaintext = new Uint8Array(decrypted);
+                const currentHash = await sha256HexBytes(plaintext);
+                if (metadata.file_hash_sha256 !== currentHash) {
+                    throw new Error("Integrity verification failed: file hash mismatch");
+                }
+
+                metadata.format = "SV01-legacy";
+                return { plaintext, metadata, hash: currentHash, ciphertextHash };
+            }
+
+            const { metadata, wrappedKey, ciphertext, mac, packageWithoutMac } = parsed;
+            const iterations = Number(metadata.kdf_iterations || PBKDF2_ITERATIONS);
+
+            const saltKek = base64ToBytes(metadata.salt_kek);
+            const saltMac = base64ToBytes(metadata.salt_mac);
+            const nonceData = base64ToBytes(metadata.nonce_data);
+            const nonceWrap = base64ToBytes(metadata.nonce_wrap);
+
+            const kek = await deriveAesKey(password, saltKek, iterations);
+            const macKey = await deriveKeyBytes(password, saltMac, iterations, DATA_KEY_LENGTH);
+
+            const hmacValid = await verifyHmacSha256(macKey, packageWithoutMac, mac);
+            if (!hmacValid) {
+                throw new Error("Integrity verification failed: HMAC mismatch");
+            }
+
+            const wrappedKeyHash = await sha256HexBytes(wrappedKey);
+            if (metadata.wrapped_key_hash_sha256 && metadata.wrapped_key_hash_sha256 !== wrappedKeyHash) {
+                throw new Error("Integrity verification failed: wrapped key hash mismatch");
+            }
+
+            const ciphertextHash = await sha256HexBytes(ciphertext);
             if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
                 throw new Error("Integrity verification failed: encrypted payload hash mismatch");
             }
 
-            const salt = base64ToBytes(metadata.salt);
-            const nonce = base64ToBytes(metadata.nonce);
-            const iterations = Number(metadata.kdf_iterations || PBKDF2_ITERATIONS);
-            const key = await deriveKey(password, salt, iterations);
+            const dataKeyRaw = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: nonceWrap },
+                kek,
+                wrappedKey
+            );
+            const dataAesKey = await importRawAesKey(new Uint8Array(dataKeyRaw));
 
             const decrypted = await crypto.subtle.decrypt(
-                { name: "AES-GCM", iv: nonce },
-                key,
+                { name: "AES-GCM", iv: nonceData },
+                dataAesKey,
                 ciphertext
             );
 
             const plaintext = new Uint8Array(decrypted);
-            const currentHash = await sha256Hex(plaintext.buffer);
+            const currentHash = await sha256HexBytes(plaintext);
             if (metadata.file_hash_sha256 !== currentHash) {
                 throw new Error("Integrity verification failed: file hash mismatch");
             }
 
-            return { plaintext, metadata, hash: currentHash, ciphertextHash };
+            return { plaintext, metadata, hash: currentHash, ciphertextHash, wrappedKeyHash, hmacVerified: true };
         }
 
         async function encryptAndDownload() {
@@ -470,13 +644,14 @@
             try {
                 const start = performance.now();
                 const arrayBuffer = await file.arrayBuffer();
-                const { payload, fileHash, ciphertextHash } = await encryptData(arrayBuffer, key, file.name);
+                const { payload, fileHash, ciphertextHash, wrappedKeyHash } = await encryptData(arrayBuffer, key, file.name);
                 const elapsedSec = (performance.now() - start) / 1000;
                 const throughput = (file.size / (1024 * 1024)) / Math.max(elapsedSec, 0.001);
 
                 addLog("encLogBox", "✅ Encryption completed");
                 addLog("encLogBox", `🧾 SHA-256: ${fileHash}`);
                 addLog("encLogBox", `🧾 Ciphertext SHA-256: ${ciphertextHash}`);
+                addLog("encLogBox", `🧾 Wrapped Key SHA-256: ${wrappedKeyHash}`);
                 addLog("encLogBox", `⚡ Time: ${elapsedSec.toFixed(2)}s, Throughput: ${throughput.toFixed(2)} MB/s`);
 
                 const blob = new Blob([payload], { type: "application/octet-stream" });
@@ -486,12 +661,12 @@
                 a.click();
 
                 updateProofPanel({
-                    integrity: "SHA-256 Verified",
+                    integrity: "Multilevel: AES-GCM + Wrap + HMAC + SHA-256",
                     status: "Secure ✅",
                     metrics: `Encryption ${elapsedSec.toFixed(2)}s | ${(file.size / (1024 * 1024)).toFixed(2)} MB | ${throughput.toFixed(2)} MB/s`
                 });
 
-                status.textContent = "✅ Encryption successful (PBKDF2 + Metadata + Integrity Hash)";
+                status.textContent = "✅ Encryption successful (Multilevel: PBKDF2 + AES layers + HMAC)";
                 status.style.color = "#86efac";
             } catch (e) {
                 updateProofPanel({ status: "Verification Failed ❌" });
@@ -515,17 +690,21 @@
 
             const start = performance.now();
             const encryptedData = new Uint8Array(await file.arrayBuffer());
-            const { plaintext, metadata, hash, ciphertextHash } = await decryptData(encryptedData, key);
+            const { plaintext, metadata, hash, ciphertextHash, wrappedKeyHash, hmacVerified } = await decryptData(encryptedData, key);
             const elapsedSec = (performance.now() - start) / 1000;
             const throughput = (plaintext.length / (1024 * 1024)) / Math.max(elapsedSec, 0.001);
 
             addLog("decLogBox", "✅ Decryption completed");
             addLog("decLogBox", `🧾 SHA-256 verified: ${hash}`);
             addLog("decLogBox", `🧾 Ciphertext SHA-256 verified: ${ciphertextHash}`);
+            if (wrappedKeyHash) {
+                addLog("decLogBox", `🧾 Wrapped Key SHA-256 verified: ${wrappedKeyHash}`);
+            }
+            addLog("decLogBox", `🛡 HMAC verification: ${hmacVerified ? "passed" : "not-applied"}`);
             addLog("decLogBox", `⚡ Time: ${elapsedSec.toFixed(2)}s, Throughput: ${throughput.toFixed(2)} MB/s`);
 
             updateProofPanel({
-                integrity: "SHA-256 Verified",
+                integrity: hmacVerified ? "HMAC + SHA-256 Verified" : "SHA-256 Verified (Legacy)",
                 status: "Secure ✅",
                 metrics: `Decryption ${elapsedSec.toFixed(2)}s | ${(plaintext.length / (1024 * 1024)).toFixed(2)} MB | ${throughput.toFixed(2)} MB/s`
             });
@@ -535,6 +714,8 @@
                 metadata,
                 ciphertextHash,
                 fileHash: hash,
+                wrappedKeyHash,
+                hmacStatus: hmacVerified ? "Verified ✅" : "N/A (Legacy Format)",
                 sourceFile: file.name
             });
 
@@ -602,8 +783,9 @@
             try {
                 const start = performance.now();
                 const encryptedData = new Uint8Array(await file.arrayBuffer());
-                const { metadata, ciphertext } = parseEncryptedPackage(encryptedData);
-                const ciphertextHash = await sha256Hex(ciphertext.buffer);
+                const parsed = parseEncryptedPackage(encryptedData);
+                const { metadata, ciphertext } = parsed;
+                const ciphertextHash = await sha256HexBytes(ciphertext);
                 const expectedHash = metadata.ciphertext_hash_sha256;
 
                 if (!expectedHash) {
@@ -614,12 +796,37 @@
                     throw new Error("Offline verification failed: ciphertext hash mismatch");
                 }
 
+                let hmacStatus = "Not checked (password required)";
+                const verifyKey = document.getElementById("decKey").value;
+                if (parsed.version === "SV02" && verifyKey) {
+                    const iterations = Number(metadata.kdf_iterations || PBKDF2_ITERATIONS);
+                    const saltMac = base64ToBytes(metadata.salt_mac);
+                    const macKey = await deriveKeyBytes(verifyKey, saltMac, iterations, DATA_KEY_LENGTH);
+                    const hmacOk = await verifyHmacSha256(macKey, parsed.packageWithoutMac, parsed.mac);
+                    if (!hmacOk) {
+                        throw new Error("Offline verification failed: HMAC mismatch (wrong key or tampered file)");
+                    }
+                    hmacStatus = "Verified ✅";
+                }
+
+                let wrappedKeyHash;
+                if (parsed.version === "SV02") {
+                    wrappedKeyHash = await sha256HexBytes(parsed.wrappedKey);
+                    if (metadata.wrapped_key_hash_sha256 && metadata.wrapped_key_hash_sha256 !== wrappedKeyHash) {
+                        throw new Error("Offline verification failed: wrapped key hash mismatch");
+                    }
+                }
+
                 const elapsedSec = (performance.now() - start) / 1000;
                 addLog("decLogBox", `✅ Offline verification passed in ${elapsedSec.toFixed(2)}s`);
                 addLog("decLogBox", `🧾 Ciphertext SHA-256 verified: ${ciphertextHash}`);
+                if (wrappedKeyHash) {
+                    addLog("decLogBox", `🧾 Wrapped Key SHA-256 verified: ${wrappedKeyHash}`);
+                }
+                addLog("decLogBox", `🛡 HMAC status: ${hmacStatus}`);
 
                 updateProofPanel({
-                    integrity: "Offline Ciphertext Hash Verified",
+                    integrity: hmacStatus.includes("Verified") ? "Offline HMAC + Hash Verified" : "Offline Ciphertext Hash Verified",
                     status: "Secure ✅",
                     metrics: `Offline Verify ${elapsedSec.toFixed(2)}s | ${(file.size / (1024 * 1024)).toFixed(2)} MB`
                 });
@@ -628,6 +835,8 @@
                     mode: "Offline Verify (No Decryption)",
                     metadata,
                     ciphertextHash,
+                    wrappedKeyHash,
+                    hmacStatus,
                     sourceFile: file.name
                 });
 

@@ -24,14 +24,16 @@ This architecture represents a **zero-knowledge encryption system** with complet
 
 ## ✨ Features
 
-- Client-side AES-256-GCM encryption and decryption using Web Crypto API
-- PBKDF2-HMAC-SHA256 key derivation with random salt and 150,000 iterations
+- Multi-level encryption pipeline (SV02 format) using layered cryptographic techniques
+- PBKDF2-HMAC-SHA256 key derivation with dual salts and 150,000 iterations
 - Zero server communication for crypto operations
 - Complete user privacy - no data leaves the device
 - Client-controlled encryption and decryption keys
 - Play or download decrypted video directly in browser
 - Self-contained encrypted package metadata (`.enc`) with KDF and crypto parameters
 - File-level SHA-256 integrity verification after decryption
+- Wrapped-key SHA-256 verification (for key-wrap layer integrity)
+- HMAC-SHA256 package authentication (password-derived MAC key)
 - Offline verification mode (no decryption): verifies encrypted payload hash from metadata
 - Blockchain-style SHA-256 hash chain for tamper-evident UI audit logs
 - Cryptographic proof panel with live algorithm, KDF, integrity and performance metrics
@@ -45,20 +47,39 @@ This architecture represents a **zero-knowledge encryption system** with complet
 
 ## 🔐 Security Model
 
-- Encryption Algorithm: **AES-256-GCM**
-- Key Derivation: **PBKDF2-HMAC-SHA256 + random salt + 150,000 iterations**
+- Encryption Algorithm: **Layered AES-256-GCM (Data Encryption + Key Wrapping)**
+- Key Derivation: **PBKDF2-HMAC-SHA256 (dual salts for KEK and MAC key) + 150,000 iterations**
 - Cryptographic Execution: **100% Client-side (browser)**
 - Data Transmission: ❌ None (completely offline after page load)
 - Server Storage: ❌ None
 - Key Storage: ❌ None (user must remember password)
-- Integrity Protection: ✅ Yes (AES-GCM authentication + SHA-256 file hash verification)
+- Integrity Protection: ✅ Yes (AES-GCM + HMAC-SHA256 + SHA-256 verification chain)
 
 Encrypted `.enc` package contains:
 
-- Format marker (`SV01`)
+- Format marker (`SV02`)
 - Metadata length + metadata JSON
-- Salt, nonce (IV), KDF iterations, algorithm and file hash
+- `salt_kek`, `salt_mac`, `nonce_data`, `nonce_wrap`
+- `wrapped_key` (AES-GCM wrapped random data key)
 - AES-GCM ciphertext payload
+- HMAC-SHA256 authentication tag for full package
+
+### Multi-Level Security Layers
+
+1. **Layer 1 – KDF Hardening**
+
+- PBKDF2-HMAC-SHA256 derives independent keys from password:
+  - KEK (Key Encryption Key)
+  - MAC key (for HMAC)
+
+2. **Layer 2 – Data Encryption**
+
+- File data is encrypted using AES-256-GCM with a random one-time Data Key.
+
+3. **Layer 3 – Key Wrapping + Authentication**
+
+- Data Key is wrapped by KEK using AES-256-GCM.
+- Entire package is authenticated with HMAC-SHA256.
 
 > Complete zero-knowledge architecture - the server never sees any video data or keys.
 
@@ -111,7 +132,7 @@ This model demonstrates:
 - True zero-knowledge architecture
 - Client-side cryptographic operations using Web Crypto API
 - Password-hardening via PBKDF2 against brute-force attacks
-- Tamper detection via file hash verification and hash-chained audit logs
+- Tamper detection via HMAC + ciphertext hash + wrapped-key hash + file hash
 - Secure multimedia handling without any server involvement
 - Client-managed file lifecycle with complete privacy
 - Bandwidth efficiency (no uploads/downloads to server)
