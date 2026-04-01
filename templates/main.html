@@ -566,6 +566,55 @@
             return crypto.subtle.verify("HMAC", key, macBytes, messageBytes);
         }
 
+        function requestWithUploadProgress(url, file, password, scope) {
+            return new Promise((resolve, reject) => {
+                const form = new FormData();
+                form.append("file", file);
+                form.append("key", password);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", url);
+                xhr.responseType = "blob";
+
+                let lastLoggedPercent = -10;
+                addLog(scope, `Upload started for ${file.name} (${file.size} bytes)`);
+
+                xhr.upload.onprogress = (event) => {
+                    if (!event.lengthComputable) return;
+                    const percent = Math.floor((event.loaded / event.total) * 100);
+                    if (percent >= lastLoggedPercent + 10 || percent === 100) {
+                        lastLoggedPercent = percent;
+                        addLog(scope, `Upload progress: ${percent}% (${event.loaded}/${event.total} bytes)`);
+                    }
+                };
+
+                xhr.onload = async () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        addLog(scope, `Upload complete. Server responded with status ${xhr.status}`);
+                        resolve({
+                            blob: xhr.response,
+                            contentDisposition: xhr.getResponseHeader("Content-Disposition"),
+                            contentType: xhr.getResponseHeader("Content-Type")
+                        });
+                        return;
+                    }
+
+                    let errorMessage = `Request failed with status ${xhr.status}`;
+                    try {
+                        if (xhr.response) {
+                            const text = await xhr.response.text();
+                            if (text) errorMessage = text;
+                        }
+                    } catch {
+                    }
+                    reject(new Error(errorMessage));
+                };
+
+                xhr.onerror = () => reject(new Error("Network error during file upload"));
+                xhr.send(form);
+            });
+        }
+
         async function encryptDataOffline(data, password, filename, mimeType) {
             addLog("ENC", "Step 1/9: Initializing offline encryption context");
             const saltKek = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
@@ -706,35 +755,25 @@
 
         async function encryptDataOnline(file, password) {
             addLog("ENC", "Step 1/4: Building online encryption request payload");
-            const form = new FormData();
-            form.append("file", file);
-            form.append("key", password);
-
-            addLog("ENC", "Step 2/4: Sending request to /encrypt");
-            const response = await fetch("/encrypt", { method: "POST", body: form });
-            if (!response.ok) throw new Error(await response.text());
+            addLog("ENC", "Step 2/4: Sending request to /encrypt with upload progress tracking");
+            const response = await requestWithUploadProgress("/encrypt", file, password, "ENC");
 
             addLog("ENC", "Step 3/4: Reading encrypted response payload");
-            const blob = await response.blob();
-            const nameFromHeader = getFilenameFromDisposition(response.headers.get("Content-Disposition"));
+            const blob = response.blob;
+            const nameFromHeader = getFilenameFromDisposition(response.contentDisposition);
             addLog("ENC", "Step 4/4: Online encryption response received");
             return { payload: blob, filename: nameFromHeader || `${file.name}.enc` };
         }
 
         async function decryptDataOnline(encFile, password) {
             addLog("DEC", "Step 1/4: Building online decryption request payload");
-            const form = new FormData();
-            form.append("file", encFile);
-            form.append("key", password);
-
-            addLog("DEC", "Step 2/4: Sending request to /decrypt");
-            const response = await fetch("/decrypt", { method: "POST", body: form });
-            if (!response.ok) throw new Error(await response.text());
+            addLog("DEC", "Step 2/4: Sending request to /decrypt with upload progress tracking");
+            const response = await requestWithUploadProgress("/decrypt", encFile, password, "DEC");
 
             addLog("DEC", "Step 3/4: Reading decrypted response payload");
-            const blob = await response.blob();
-            const filename = getFilenameFromDisposition(response.headers.get("Content-Disposition")) || "decrypted_file";
-            const mimeType = blob.type || response.headers.get("Content-Type") || "application/octet-stream";
+            const blob = response.blob;
+            const filename = getFilenameFromDisposition(response.contentDisposition) || "decrypted_file";
+            const mimeType = blob.type || response.contentType || "application/octet-stream";
             addLog("DEC", "Step 4/4: Online decryption response received");
 
             return {
