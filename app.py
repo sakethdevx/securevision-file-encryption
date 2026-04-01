@@ -12,15 +12,23 @@ def home():
 
 @app.route("/encrypt", methods=["POST"])
 def encrypt():
-    video = request.files["video"].read()
+    uploaded_file = request.files.get("file") or request.files.get("video")
+    if not uploaded_file:
+        return "❌ Missing file", 400
+    file_bytes = uploaded_file.read()
     password = request.form["key"]
 
-    encrypted = encrypt_with_password(video, password, original_filename=request.files["video"].filename)
+    encrypted = encrypt_with_password(
+        file_bytes,
+        password,
+        original_filename=uploaded_file.filename,
+        mime_type=uploaded_file.mimetype,
+    )
 
     return send_file(
         BytesIO(encrypted),
         as_attachment=True,
-        download_name="video.enc",
+        download_name=f"{uploaded_file.filename}.enc" if uploaded_file.filename else "encrypted_file.enc",
         mimetype="application/octet-stream"
     )
 
@@ -28,16 +36,20 @@ def encrypt():
 @app.route("/decrypt", methods=["POST"])
 def decrypt():
     try:
-        enc_file = request.files["video"].read()
+        uploaded_file = request.files.get("file") or request.files.get("video")
+        if not uploaded_file:
+            return "❌ Missing encrypted file", 400
+
+        enc_file = uploaded_file.read()
         password = request.form["key"]
 
-        decrypted, _ = decrypt_with_password(enc_file, password)
+        decrypted, metadata = decrypt_with_password(enc_file, password)
 
         return send_file(
             BytesIO(decrypted),
             as_attachment=True,
-            download_name="decrypted_video.mp4",
-            mimetype="video/mp4"
+            download_name=metadata.get("filename", "decrypted_file"),
+            mimetype=metadata.get("mime_type", "application/octet-stream")
         )
 
     except InvalidTag:

@@ -34,7 +34,12 @@ def decrypt_bytes(enc_data: bytes, key: bytes) -> bytes:
     return aes.decrypt(nonce, data, None)
 
 
-def encrypt_with_password(data: bytes, password: str, original_filename: Optional[str] = None) -> bytes:
+def encrypt_with_password(
+    data: bytes,
+    password: str,
+    original_filename: Optional[str] = None,
+    mime_type: Optional[str] = None,
+) -> bytes:
     salt_kek = os.urandom(SALT_SIZE)
     salt_mac = os.urandom(SALT_SIZE)
     nonce_data = os.urandom(NONCE_SIZE)
@@ -76,6 +81,8 @@ def encrypt_with_password(data: bytes, password: str, original_filename: Optiona
     }
     if original_filename:
         metadata["filename"] = original_filename
+    if mime_type:
+        metadata["mime_type"] = mime_type
 
     metadata_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
     body = wrapped_key + ciphertext

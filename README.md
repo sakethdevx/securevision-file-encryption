@@ -1,6 +1,6 @@
 # 🔐 SecureVision – Client-Side Encryption Model
 
-SecureVision is a privacy-focused video encryption and playback system that performs
+SecureVision is a privacy-focused file encryption and verification system that performs
 **100% client-side cryptographic operations**, with **zero data transmission to servers**,
 and provides **transparent client-visible audit logs**.
 
@@ -10,12 +10,12 @@ and provides **transparent client-visible audit logs**.
 
 In this model:
 
-- The client encrypts videos entirely in the browser using Web Crypto API
-- No video data is ever uploaded to any server
+- The client encrypts files entirely in the browser using Web Crypto API
+- No file data is ever uploaded to any server
 - All encryption/decryption happens on the user's device
 - Encrypted files are saved directly to the user's device
 - For decryption, the process happens entirely client-side
-- The decrypted video can be played in-browser or downloaded
+- Decrypted output can be downloaded for any file type (video preview supported when MIME is `video/*`)
 - All major actions are logged and visible to the client
 
 This architecture represents a **zero-knowledge encryption system** with complete client control.
@@ -29,7 +29,7 @@ This architecture represents a **zero-knowledge encryption system** with complet
 - Zero server communication for crypto operations
 - Complete user privacy - no data leaves the device
 - Client-controlled encryption and decryption keys
-- Play or download decrypted video directly in browser
+- Download decrypted output for any file type, with optional video preview when applicable
 - Self-contained encrypted package metadata (`.enc`) with KDF and crypto parameters
 - File-level SHA-256 integrity verification after decryption
 - Wrapped-key SHA-256 verification (for key-wrap layer integrity)
@@ -72,16 +72,16 @@ Encrypted `.enc` package contains:
   - KEK (Key Encryption Key)
   - MAC key (for HMAC)
 
-2. **Layer 2 – Data Encryption**
+1. **Layer 2 – Data Encryption**
 
 - File data is encrypted using AES-256-GCM with a random one-time Data Key.
 
-3. **Layer 3 – Key Wrapping + Authentication**
+1. **Layer 3 – Key Wrapping + Authentication**
 
 - Data Key is wrapped by KEK using AES-256-GCM.
 - Entire package is authenticated with HMAC-SHA256.
 
-> Complete zero-knowledge architecture - the server never sees any video data or keys.
+> Complete zero-knowledge architecture - the server never sees any file data or keys.
 
 ---
 
@@ -120,7 +120,7 @@ Logs can be **shown or hidden independently** for encryption and decryption.
 | Client | All encryption, decryption, file selection, playback, download |
 | Server | Serves static HTML only (no crypto operations) |
 | Storage | ❌ None on server |
-| Data Transfer | ❌ No video data transmitted |
+| Data Transfer | ❌ No file data transmitted |
 | Logs | Client-visible, hash-chained, non-persistent |
 
 ---
@@ -144,8 +144,8 @@ This model demonstrates:
 
 ## 💡 Key Benefits
 
-1. **Zero Bandwidth Usage**: No video uploads/downloads to server
-2. **Complete Privacy**: Server never sees video content or keys
+1. **Zero Bandwidth Usage**: No file uploads/downloads to server
+2. **Complete Privacy**: Server never sees file content or keys
 3. **Offline Capable**: Works without internet after initial page load
 4. **Fast Processing**: No network latency for encryption operations
 5. **Scalable**: Server only serves static HTML (minimal resources)
@@ -157,10 +157,10 @@ This model demonstrates:
 1. Install dependencies: `pip install flask cryptography`
 2. Run the server: `python app.py`
 3. Open browser to `http://localhost:5000`
-4. Select a video file and enter a password
+4. Select any file and enter a password
 5. Click "Encrypt & Download" - encryption happens in your browser
 6. The encrypted file (.enc) is saved to your device
-7. To decrypt: upload the .enc file, enter the same password, and play or download
+7. To decrypt: upload the `.enc` file, enter the same password, then preview (video only) or download
 8. To verify without decryption: upload the .enc file and click **Offline Verify (No Decryption)**
 
 **Important**: All encryption/decryption happens in your browser. The server only serves the HTML page!

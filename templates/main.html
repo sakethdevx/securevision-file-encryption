@@ -189,9 +189,9 @@
 
         <!-- ================= ENCRYPT ================= -->
         <div class="section">
-            <h2>Encrypt & Download (100% Client-Side)</h2>
+            <h2>Encrypt Any File (100% Client-Side)</h2>
 
-            <input type="file" id="plainVideo" accept="video/*">
+            <input type="file" id="plainFile">
             <input type="password" id="encKey" placeholder="Encryption key">
 
             <button type="button" onclick="encryptAndDownload()">Encrypt & Download</button>
@@ -205,13 +205,13 @@
 
         <!-- ================= DECRYPT ================= -->
         <div class="section">
-            <h2>Decrypt – Play or Download</h2>
+            <h2>Decrypt – Preview (Video) or Download (Any File)</h2>
 
             <input type="file" id="encFile">
             <input type="password" id="decKey" placeholder="Decryption key">
 
             <div class="button-row">
-                <button type="button" onclick="decryptAndPlay()">▶ Play</button>
+                <button type="button" onclick="decryptAndPlay()">▶ Preview</button>
                 <button type="button" onclick="decryptAndDownload()">⬇ Download</button>
             </div>
             <button type="button" onclick="verifyEncryptedPackage()">🛡 Offline Verify (No Decryption)</button>
@@ -495,7 +495,7 @@
             return crypto.subtle.verify("HMAC", key, macBytes, messageBytes);
         }
 
-        async function encryptData(data, password, filename) {
+        async function encryptData(data, password, filename, mimeType) {
             const saltKek = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
             const saltMac = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
             const nonceData = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
@@ -544,6 +544,7 @@
                 ciphertext_hash_sha256: ciphertextHash,
                 wrapped_key_hash_sha256: wrappedKeyHash,
                 filename,
+                mime_type: mimeType || "application/octet-stream",
                 created_at: new Date().toISOString()
             };
 
@@ -639,12 +640,12 @@
             const status = document.getElementById("encStatus");
             addLog("encLogBox", "🔐 Client-side encryption started");
 
-            const file = document.getElementById("plainVideo").files[0];
+            const file = document.getElementById("plainFile").files[0];
             const key = document.getElementById("encKey").value;
 
             if (!file || !key) {
                 addLog("encLogBox", "❌ Missing video or key");
-                status.textContent = "Please select video and enter key";
+                status.textContent = "Please select a file and enter key";
                 status.style.color = "#fca5a5";
                 return;
             }
@@ -656,7 +657,7 @@
             try {
                 const start = performance.now();
                 const arrayBuffer = await file.arrayBuffer();
-                const { payload, fileHash, ciphertextHash, wrappedKeyHash } = await encryptData(arrayBuffer, key, file.name);
+                const { payload, fileHash, ciphertextHash, wrappedKeyHash } = await encryptData(arrayBuffer, key, file.name, file.type);
                 const elapsedSec = (performance.now() - start) / 1000;
                 const throughput = (file.size / (1024 * 1024)) / Math.max(elapsedSec, 0.001);
 
@@ -737,23 +738,30 @@
                 sourceFile: file.name
             });
 
+            const outputMimeType = metadata.mime_type || "application/octet-stream";
             return {
-                blob: new Blob([plaintext], { type: "video/mp4" }),
-                filename: metadata.filename || "decrypted_video.mp4"
+                blob: new Blob([plaintext], { type: outputMimeType }),
+                filename: metadata.filename || "decrypted_file",
+                mimeType: outputMimeType
             };
         }
 
         async function decryptAndPlay() {
             const status = document.getElementById("status");
-            addLog("decLogBox", "▶ Play clicked");
+            addLog("decLogBox", "▶ Preview clicked");
 
             try {
                 const result = await decryptFile();
-                document.getElementById("videoPlayer").src = URL.createObjectURL(result.blob);
-                addLog("decLogBox", "▶ Playback started");
-
-                status.textContent = "▶ Playing video (Integrity Verified)";
-                status.style.color = "#86efac";
+                if (result.mimeType && result.mimeType.startsWith("video/")) {
+                    document.getElementById("videoPlayer").src = URL.createObjectURL(result.blob);
+                    addLog("decLogBox", "▶ Video preview started");
+                    status.textContent = "▶ Preview started (video file)";
+                    status.style.color = "#86efac";
+                } else {
+                    addLog("decLogBox", `ℹ Preview skipped for MIME type: ${result.mimeType}`);
+                    status.textContent = "ℹ This file type does not support in-page preview. Use Download.";
+                    status.style.color = "#fde68a";
+                }
             } catch (e) {
                 updateProofPanel({ status: "Verification Failed ❌", integrity: "SHA-256 Failed" });
                 addLog("decLogBox", `❌ ${e.message}`);
