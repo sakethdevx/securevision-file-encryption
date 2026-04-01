@@ -171,6 +171,10 @@
             min-height: 280px;
         }
 
+        .preview-hidden {
+            display: none;
+        }
+
         .preview-meta {
             font-size: 12px;
             color: var(--muted);
@@ -349,7 +353,7 @@
 
         <div class="card">
             <h2>Preview</h2>
-            <div class="preview-shell">
+            <div id="previewShell" class="preview-shell preview-hidden">
                 <div id="previewMeta" class="preview-meta">No file preview yet</div>
                 <div id="previewPlaceholder" class="placeholder">Supported preview types: image, video, audio,
                     text/csv/json/xml, pdf.</div>
@@ -364,7 +368,7 @@
 
         <div class="card">
             <div class="logs-header">
-                <h2 style="margin:0">Audit Logs (Always Visible)</h2>
+                <h2 style="margin:0">Audit Logs</h2>
                 <div class="logs-actions">
                     <button type="button" id="toggleLogsBtn" onclick="toggleLogging()">Turn Off Logs</button>
                     <button type="button" onclick="clearLogs()">Clear Logs</button>
@@ -871,6 +875,7 @@
 
         function resetPreview() {
             addLog("PRV", "Resetting preview widgets");
+            document.getElementById("previewShell").classList.add("preview-hidden");
             document.getElementById("previewImage").style.display = "none";
             document.getElementById("previewVideo").style.display = "none";
             document.getElementById("previewAudio").style.display = "none";
@@ -883,6 +888,7 @@
             resetPreview();
             const safeType = mimeType || "application/octet-stream";
             addLog("PRV", `Preview dispatch for ${filename} with MIME ${safeType}`);
+            document.getElementById("previewShell").classList.remove("preview-hidden");
             document.getElementById("previewMeta").textContent = `File: ${filename} | MIME: ${safeType} | Size: ${blob.size} bytes`;
 
             const url = URL.createObjectURL(blob);
