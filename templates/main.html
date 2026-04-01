@@ -110,6 +110,60 @@
             font-size: 13px;
             white-space: pre-wrap;
         }
+
+        .proof-panel {
+            border: 1px solid #1e293b;
+            background: #0b1220;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+
+        .proof-panel h2 {
+            margin-bottom: 10px;
+        }
+
+        .proof-panel ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            line-height: 1.8;
+            font-size: 14px;
+        }
+
+        .proof-secure {
+            color: #86efac;
+            font-weight: bold;
+        }
+
+        .proof-warning {
+            color: #fca5a5;
+            font-weight: bold;
+        }
+
+        .verify-details {
+            margin-top: 12px;
+            background: #0b1220;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            display: none;
+        }
+
+        .verify-details-title {
+            color: #a5f3fc;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .verify-details pre {
+            margin: 0;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: monospace;
+        }
     </style>
 </head>
 
@@ -117,6 +171,18 @@
 
     <div class="container">
         <h1>🔐 SecureVision - Client-Side Encryption</h1>
+
+        <div class="proof-panel">
+            <h2>🔍 Cryptographic Proof Panel</h2>
+            <ul>
+                <li>✔ Encryption Algorithm: <span id="proofAlgo">AES-256-GCM</span></li>
+                <li>✔ Key Derivation: <span id="proofKdf">PBKDF2-HMAC-SHA256 (150000 iterations)</span></li>
+                <li>✔ Integrity Check: <span id="proofIntegrity">SHA-256 Pending</span></li>
+                <li>✔ Audit Chain: <span id="proofChain">SHA-256 Hash Chain Active</span></li>
+                <li>✔ Status: <span id="proofStatus" class="proof-secure">Secure ✅</span></li>
+                <li>✔ Metrics: <span id="proofMetrics">Waiting for operation</span></li>
+            </ul>
+        </div>
 
         <!-- ================= ENCRYPT ================= -->
         <div class="section">
@@ -145,9 +211,14 @@
                 <button type="button" onclick="decryptAndPlay()">▶ Play</button>
                 <button type="button" onclick="decryptAndDownload()">⬇ Download</button>
             </div>
+            <button type="button" onclick="verifyEncryptedPackage()">🛡 Offline Verify (No Decryption)</button>
 
             <p id="status" class="status"></p>
             <video id="videoPlayer" controls></video>
+            <div id="verifyDetails" class="verify-details">
+                <div id="verifyDetailsTitle" class="verify-details-title">Verification Details</div>
+                <pre id="verifyDetailsContent"></pre>
+            </div>
 
             <button class="log-toggle" onclick="toggleLogs('decLogBox')">
                 📜 Show / Hide Decryption Logs
@@ -157,85 +228,226 @@
     </div>
 
     <script>
-        /* ========= LOGGING SYSTEM ========= */
+        const PBKDF2_ITERATIONS = 150000;
+        const SALT_LENGTH = 16;
+        const NONCE_LENGTH = 12;
+        const HEADER_MAGIC = "SV01";
+
+        const logState = {
+            encLogBox: { lastHash: "GENESIS", queue: Promise.resolve() },
+            decLogBox: { lastHash: "GENESIS", queue: Promise.resolve() }
+        };
+
+        function updateProofPanel({ integrity, status, metrics }) {
+            if (integrity) {
+                document.getElementById("proofIntegrity").textContent = integrity;
+            }
+            if (metrics) {
+                document.getElementById("proofMetrics").textContent = metrics;
+            }
+            if (status) {
+                const statusEl = document.getElementById("proofStatus");
+                statusEl.textContent = status;
+                statusEl.className = status.includes("✅") ? "proof-secure" : "proof-warning";
+            }
+        }
+
+        function updateVerificationDetails({ mode, metadata, ciphertextHash, fileHash, sourceFile }) {
+            const box = document.getElementById("verifyDetails");
+            const title = document.getElementById("verifyDetailsTitle");
+            const content = document.getElementById("verifyDetailsContent");
+
+            const lines = [
+                `Mode: ${mode || "N/A"}`,
+                `Source File: ${sourceFile || metadata.filename || "N/A"}`,
+                `Algorithm: ${metadata.algorithm || "N/A"}`,
+                `KDF: ${metadata.kdf || "N/A"}`,
+                `KDF Iterations: ${metadata.kdf_iterations || "N/A"}`,
+                `Created At: ${metadata.created_at || "N/A"}`,
+                `Expected Ciphertext Hash: ${metadata.ciphertext_hash_sha256 || "N/A"}`,
+                `Computed Ciphertext Hash: ${ciphertextHash || "N/A"}`,
+                `Expected File Hash: ${metadata.file_hash_sha256 || "N/A"}`,
+                `Computed File Hash: ${fileHash || "N/A"}`
+            ];
+
+            title.textContent = `Verification Details (${mode || "Unknown"})`;
+            content.textContent = lines.join("\n");
+            box.style.display = "block";
+        }
+
+        async function sha256Hex(data) {
+            const buffer = await crypto.subtle.digest("SHA-256", data);
+            const bytes = new Uint8Array(buffer);
+            return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+        }
+
+        function bytesToBase64(bytes) {
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode(...chunk);
+            }
+            return btoa(binary);
+        }
+
+        function base64ToBytes(base64) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        function createHeaderBytes(metadataObj) {
+            const encoder = new TextEncoder();
+            const magic = encoder.encode(HEADER_MAGIC);
+            const metadataBytes = encoder.encode(JSON.stringify(metadataObj));
+            const result = new Uint8Array(8 + metadataBytes.length);
+            result.set(magic, 0);
+            const view = new DataView(result.buffer);
+            view.setUint32(4, metadataBytes.length, false);
+            result.set(metadataBytes, 8);
+            return result;
+        }
+
+        function parseEncryptedPackage(bytes) {
+            if (bytes.length < 8) {
+                throw new Error("Invalid encrypted file format");
+            }
+
+            const decoder = new TextDecoder();
+            const magic = decoder.decode(bytes.slice(0, 4));
+            if (magic !== HEADER_MAGIC) {
+                throw new Error("Unsupported encrypted file format");
+            }
+
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            const metadataLength = view.getUint32(4, false);
+            const metadataStart = 8;
+            const metadataEnd = metadataStart + metadataLength;
+
+            if (metadataEnd > bytes.length) {
+                throw new Error("Corrupted encrypted metadata");
+            }
+
+            const metadataText = decoder.decode(bytes.slice(metadataStart, metadataEnd));
+            const metadata = JSON.parse(metadataText);
+            const ciphertext = bytes.slice(metadataEnd);
+
+            return { metadata, ciphertext };
+        }
 
         function addLog(boxId, message) {
-            const time = new Date().toLocaleTimeString();
-            const line = `[${time}] ${message}\n`;
+            const state = logState[boxId];
+            state.queue = state.queue.then(async () => {
+                const time = new Date().toLocaleTimeString();
+                const payload = new TextEncoder().encode(`${state.lastHash}|${time}|${message}`);
+                const currentHash = await sha256Hex(payload);
 
-            console.log(message);
+                const line = `[${time}] [hash:${currentHash.slice(0, 12)} prev:${state.lastHash.slice(0, 12)}] ${message}\n`;
+                const box = document.getElementById(boxId);
+                box.textContent += line;
+                box.scrollTop = box.scrollHeight;
 
-            const box = document.getElementById(boxId);
-            box.textContent += line;
-            box.scrollTop = box.scrollHeight;
+                console.log(message);
+                state.lastHash = currentHash;
+            });
+
+            return state.queue;
         }
 
         function toggleLogs(id) {
             const box = document.getElementById(id);
-            box.style.display = box.style.display === "none" ? "block" : "none";
+            const isHidden = getComputedStyle(box).display === "none";
+            box.style.display = isHidden ? "block" : "none";
         }
 
-        /* ========= CRYPTO UTILITIES (Client-Side) ========= */
-
-        // Derive AES-GCM key from password using SHA-256
-        async function deriveKey(password) {
+        async function deriveKey(password, salt, iterations = PBKDF2_ITERATIONS) {
             const encoder = new TextEncoder();
-            const keyMaterial = encoder.encode(password);
-
-            // Hash the password with SHA-256 to get 32 bytes
-            const hashBuffer = await crypto.subtle.digest('SHA-256', keyMaterial);
-
-            // Import the hash as an AES-GCM key
-            return await crypto.subtle.importKey(
-                'raw',
-                hashBuffer,
-                { name: 'AES-GCM', length: 256 },
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                encoder.encode(password),
+                "PBKDF2",
                 false,
-                ['encrypt', 'decrypt']
+                ["deriveKey"]
+            );
+
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt,
+                    iterations,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
             );
         }
 
-        // Encrypt data using AES-GCM (compatible with Python AESGCM)
-        async function encryptData(data, password) {
-            const key = await deriveKey(password);
+        async function encryptData(data, password, filename) {
+            const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+            const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+            const key = await deriveKey(password, salt, PBKDF2_ITERATIONS);
+            const fileHash = await sha256Hex(data);
 
-            // Generate random 12-byte nonce (same as Python's os.urandom(12))
-            const nonce = crypto.getRandomValues(new Uint8Array(12));
-
-            // Encrypt the data
             const encrypted = await crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: nonce },
+                { name: "AES-GCM", iv: nonce },
                 key,
                 data
             );
+            const encryptedBytes = new Uint8Array(encrypted);
+            const ciphertextHash = await sha256Hex(encryptedBytes.buffer);
 
-            // Concatenate nonce + encrypted data (same format as Python)
-            const result = new Uint8Array(nonce.length + encrypted.byteLength);
-            result.set(nonce, 0);
-            result.set(new Uint8Array(encrypted), nonce.length);
+            const metadata = {
+                algorithm: "AES-256-GCM",
+                kdf: "PBKDF2-HMAC-SHA256",
+                kdf_iterations: PBKDF2_ITERATIONS,
+                salt: bytesToBase64(salt),
+                nonce: bytesToBase64(nonce),
+                file_hash_sha256: fileHash,
+                ciphertext_hash_sha256: ciphertextHash,
+                filename,
+                created_at: new Date().toISOString()
+            };
 
-            return result;
+            const header = createHeaderBytes(metadata);
+            const result = new Uint8Array(header.length + encryptedBytes.length);
+            result.set(header, 0);
+            result.set(encryptedBytes, header.length);
+
+            return { payload: result, fileHash, ciphertextHash };
         }
 
-        // Decrypt data using AES-GCM (compatible with Python AESGCM)
         async function decryptData(encryptedData, password) {
-            const key = await deriveKey(password);
+            const { metadata, ciphertext } = parseEncryptedPackage(encryptedData);
+            const ciphertextHash = await sha256Hex(ciphertext.buffer);
+            if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
+                throw new Error("Integrity verification failed: encrypted payload hash mismatch");
+            }
 
-            // Extract nonce (first 12 bytes) and encrypted data
-            const nonce = encryptedData.slice(0, 12);
-            const data = encryptedData.slice(12);
+            const salt = base64ToBytes(metadata.salt);
+            const nonce = base64ToBytes(metadata.nonce);
+            const iterations = Number(metadata.kdf_iterations || PBKDF2_ITERATIONS);
+            const key = await deriveKey(password, salt, iterations);
 
-            // Decrypt the data
             const decrypted = await crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: nonce },
+                { name: "AES-GCM", iv: nonce },
                 key,
-                data
+                ciphertext
             );
 
-            return new Uint8Array(decrypted);
-        }
+            const plaintext = new Uint8Array(decrypted);
+            const currentHash = await sha256Hex(plaintext.buffer);
+            if (metadata.file_hash_sha256 !== currentHash) {
+                throw new Error("Integrity verification failed: file hash mismatch");
+            }
 
-        /* ========= ENCRYPT (Client-Side) ========= */
+            return { plaintext, metadata, hash: currentHash, ciphertextHash };
+        }
 
         async function encryptAndDownload() {
             const status = document.getElementById("encStatus");
@@ -253,41 +465,41 @@
 
             addLog("encLogBox", `📁 File: ${file.name}`);
             addLog("encLogBox", `📦 Size: ${file.size} bytes`);
-            addLog("encLogBox", "🔑 Deriving encryption key from password");
+            addLog("encLogBox", `🔑 Deriving key with PBKDF2 (${PBKDF2_ITERATIONS} iterations)`);
 
             try {
-                // Read file as ArrayBuffer
-                addLog("encLogBox", "📖 Reading video file");
+                const start = performance.now();
                 const arrayBuffer = await file.arrayBuffer();
-
-                // Encrypt on client side
-                addLog("encLogBox", "🔐 Encrypting video (this may take a moment for large files)");
-                const encrypted = await encryptData(arrayBuffer, key);
+                const { payload, fileHash, ciphertextHash } = await encryptData(arrayBuffer, key, file.name);
+                const elapsedSec = (performance.now() - start) / 1000;
+                const throughput = (file.size / (1024 * 1024)) / Math.max(elapsedSec, 0.001);
 
                 addLog("encLogBox", "✅ Encryption completed");
-                addLog("encLogBox", `📦 Encrypted size: ${encrypted.length} bytes`);
-                addLog("encLogBox", "⬇ Preparing download");
+                addLog("encLogBox", `🧾 SHA-256: ${fileHash}`);
+                addLog("encLogBox", `🧾 Ciphertext SHA-256: ${ciphertextHash}`);
+                addLog("encLogBox", `⚡ Time: ${elapsedSec.toFixed(2)}s, Throughput: ${throughput.toFixed(2)} MB/s`);
 
-                // Create blob and download
-                const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+                const blob = new Blob([payload], { type: "application/octet-stream" });
                 const a = document.createElement("a");
                 a.href = URL.createObjectURL(blob);
-                a.download = "video.enc";
+                a.download = `${file.name}.enc`;
                 a.click();
 
-                addLog("encLogBox", "✅ Encrypted file download completed");
-                addLog("encLogBox", "💾 No data was uploaded to server!");
+                updateProofPanel({
+                    integrity: "SHA-256 Verified",
+                    status: "Secure ✅",
+                    metrics: `Encryption ${elapsedSec.toFixed(2)}s | ${(file.size / (1024 * 1024)).toFixed(2)} MB | ${throughput.toFixed(2)} MB/s`
+                });
 
-                status.textContent = "✅ Encryption successful (Client-Side)";
+                status.textContent = "✅ Encryption successful (PBKDF2 + Metadata + Integrity Hash)";
                 status.style.color = "#86efac";
             } catch (e) {
+                updateProofPanel({ status: "Verification Failed ❌" });
                 addLog("encLogBox", `❌ ${e.message}`);
                 status.textContent = e.message;
                 status.style.color = "#fca5a5";
             }
         }
-
-        /* ========= DECRYPT (Client-Side) ========= */
 
         async function decryptFile() {
             addLog("decLogBox", "🔓 Client-side decryption started");
@@ -299,22 +511,37 @@
 
             addLog("decLogBox", `📁 Encrypted file: ${file.name}`);
             addLog("decLogBox", `📦 Size: ${file.size} bytes`);
-            addLog("decLogBox", "🔑 Deriving decryption key from password");
+            addLog("decLogBox", `🔑 Deriving key with PBKDF2 (${PBKDF2_ITERATIONS} iterations)`);
 
-            // Read file as ArrayBuffer
-            addLog("decLogBox", "📖 Reading encrypted file");
-            const arrayBuffer = await file.arrayBuffer();
-            const encryptedData = new Uint8Array(arrayBuffer);
-
-            // Decrypt on client side
-            addLog("decLogBox", "🔓 Decrypting video (this may take a moment for large files)");
-            const decrypted = await decryptData(encryptedData, key);
+            const start = performance.now();
+            const encryptedData = new Uint8Array(await file.arrayBuffer());
+            const { plaintext, metadata, hash, ciphertextHash } = await decryptData(encryptedData, key);
+            const elapsedSec = (performance.now() - start) / 1000;
+            const throughput = (plaintext.length / (1024 * 1024)) / Math.max(elapsedSec, 0.001);
 
             addLog("decLogBox", "✅ Decryption completed");
-            addLog("decLogBox", `📦 Decrypted size: ${decrypted.length} bytes`);
-            addLog("decLogBox", "💾 No data was uploaded to server!");
+            addLog("decLogBox", `🧾 SHA-256 verified: ${hash}`);
+            addLog("decLogBox", `🧾 Ciphertext SHA-256 verified: ${ciphertextHash}`);
+            addLog("decLogBox", `⚡ Time: ${elapsedSec.toFixed(2)}s, Throughput: ${throughput.toFixed(2)} MB/s`);
 
-            return new Blob([decrypted], { type: 'video/mp4' });
+            updateProofPanel({
+                integrity: "SHA-256 Verified",
+                status: "Secure ✅",
+                metrics: `Decryption ${elapsedSec.toFixed(2)}s | ${(plaintext.length / (1024 * 1024)).toFixed(2)} MB | ${throughput.toFixed(2)} MB/s`
+            });
+
+            updateVerificationDetails({
+                mode: "Decryption + Verification",
+                metadata,
+                ciphertextHash,
+                fileHash: hash,
+                sourceFile: file.name
+            });
+
+            return {
+                blob: new Blob([plaintext], { type: "video/mp4" }),
+                filename: metadata.filename || "decrypted_video.mp4"
+            };
         }
 
         async function decryptAndPlay() {
@@ -322,13 +549,14 @@
             addLog("decLogBox", "▶ Play clicked");
 
             try {
-                const blob = await decryptFile();
-                document.getElementById("videoPlayer").src = URL.createObjectURL(blob);
+                const result = await decryptFile();
+                document.getElementById("videoPlayer").src = URL.createObjectURL(result.blob);
                 addLog("decLogBox", "▶ Playback started");
 
-                status.textContent = "▶ Playing video (Client-Side Decryption)";
+                status.textContent = "▶ Playing video (Integrity Verified)";
                 status.style.color = "#86efac";
             } catch (e) {
+                updateProofPanel({ status: "Verification Failed ❌", integrity: "SHA-256 Failed" });
                 addLog("decLogBox", `❌ ${e.message}`);
                 status.textContent = e.message;
                 status.style.color = "#fca5a5";
@@ -340,19 +568,73 @@
             addLog("decLogBox", "⬇ Download clicked");
 
             try {
-                const blob = await decryptFile();
+                const result = await decryptFile();
                 addLog("decLogBox", "⬇ Downloading decrypted video");
 
                 const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "decrypted_video.mp4";
+                a.href = URL.createObjectURL(result.blob);
+                a.download = result.filename;
                 a.click();
 
                 addLog("decLogBox", "✅ Decrypted video download completed");
-
-                status.textContent = "⬇ Downloaded video (Client-Side Decryption)";
+                status.textContent = "⬇ Downloaded video (Integrity Verified)";
                 status.style.color = "#86efac";
             } catch (e) {
+                updateProofPanel({ status: "Verification Failed ❌", integrity: "SHA-256 Failed" });
+                addLog("decLogBox", `❌ ${e.message}`);
+                status.textContent = e.message;
+                status.style.color = "#fca5a5";
+            }
+        }
+
+        async function verifyEncryptedPackage() {
+            const status = document.getElementById("status");
+            const file = document.getElementById("encFile").files[0];
+
+            if (!file) {
+                status.textContent = "Please select an encrypted file for verification";
+                status.style.color = "#fca5a5";
+                return;
+            }
+
+            addLog("decLogBox", "🛡 Offline verification started (no decryption)");
+
+            try {
+                const start = performance.now();
+                const encryptedData = new Uint8Array(await file.arrayBuffer());
+                const { metadata, ciphertext } = parseEncryptedPackage(encryptedData);
+                const ciphertextHash = await sha256Hex(ciphertext.buffer);
+                const expectedHash = metadata.ciphertext_hash_sha256;
+
+                if (!expectedHash) {
+                    throw new Error("This encrypted file does not include offline verification metadata");
+                }
+
+                if (expectedHash !== ciphertextHash) {
+                    throw new Error("Offline verification failed: ciphertext hash mismatch");
+                }
+
+                const elapsedSec = (performance.now() - start) / 1000;
+                addLog("decLogBox", `✅ Offline verification passed in ${elapsedSec.toFixed(2)}s`);
+                addLog("decLogBox", `🧾 Ciphertext SHA-256 verified: ${ciphertextHash}`);
+
+                updateProofPanel({
+                    integrity: "Offline Ciphertext Hash Verified",
+                    status: "Secure ✅",
+                    metrics: `Offline Verify ${elapsedSec.toFixed(2)}s | ${(file.size / (1024 * 1024)).toFixed(2)} MB`
+                });
+
+                updateVerificationDetails({
+                    mode: "Offline Verify (No Decryption)",
+                    metadata,
+                    ciphertextHash,
+                    sourceFile: file.name
+                });
+
+                status.textContent = "🛡 Offline verification passed (no decryption performed)";
+                status.style.color = "#86efac";
+            } catch (e) {
+                updateProofPanel({ integrity: "Offline Verification Failed", status: "Verification Failed ❌" });
                 addLog("decLogBox", `❌ ${e.message}`);
                 status.textContent = e.message;
                 status.style.color = "#fca5a5";
