@@ -291,6 +291,26 @@
             color: var(--muted);
             margin-bottom: 8px;
         }
+
+        .diagram-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .diagram-controls select,
+        .diagram-controls button {
+            width: auto;
+        }
+
+        .diagram-frame {
+            width: 100%;
+            min-height: 380px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+        }
     </style>
 </head>
 
@@ -363,6 +383,20 @@
                 <audio id="previewAudio" class="preview-audio" controls></audio>
                 <pre id="previewText" class="preview-text preview-frame"></pre>
                 <iframe id="previewPdf" class="preview-pdf preview-frame" title="PDF preview"></iframe>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Architecture Diagrams</h2>
+            <div class="diagram-controls">
+                <select id="diagramSelect" onchange="loadSelectedDiagram()">
+                    <option value="crypto">Cryptographic Architecture</option>
+                    <option value="full">Full Architecture</option>
+                </select>
+                <button type="button" id="toggleDiagramBtn" onclick="toggleDiagramPanel()">Show Diagram</button>
+            </div>
+            <div id="diagramShell" class="preview-hidden">
+                <img id="diagramImage" class="diagram-frame" alt="Architecture diagram">
             </div>
         </div>
 
@@ -1076,6 +1110,30 @@
             btn.textContent = logsEnabled ? "Turn Off Logs" : "Turn On Logs";
             if (logsEnabled) {
                 addLog("SYS", "Logging enabled");
+            }
+        }
+
+        function loadSelectedDiagram() {
+            const selected = document.getElementById("diagramSelect").value;
+            const image = document.getElementById("diagramImage");
+            image.src = `/diagram/${selected}`;
+            addLog("SYS", `Diagram selected: ${selected}`);
+        }
+
+        function toggleDiagramPanel() {
+            const shell = document.getElementById("diagramShell");
+            const btn = document.getElementById("toggleDiagramBtn");
+            const hidden = shell.classList.contains("preview-hidden");
+
+            if (hidden) {
+                loadSelectedDiagram();
+                shell.classList.remove("preview-hidden");
+                btn.textContent = "Hide Diagram";
+                addLog("SYS", "Architecture diagram panel opened");
+            } else {
+                shell.classList.add("preview-hidden");
+                btn.textContent = "Show Diagram";
+                addLog("SYS", "Architecture diagram panel hidden");
             }
         }
 

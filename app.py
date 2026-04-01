@@ -1,13 +1,26 @@
-from flask import Flask, request, send_file, render_template
+from flask import Flask, request, send_file, render_template, send_from_directory, abort
 from crypto_utils import encrypt_with_password, decrypt_with_password
 from cryptography.exceptions import InvalidTag
 from io import BytesIO
 
 app = Flask(__name__)
 
+DIAGRAM_FILES = {
+    "crypto": "cryptographic architecture.svg",
+    "full": "full architecture.svg",
+}
+
 @app.route("/")
 def home():
     return render_template("main.html")
+
+
+@app.route("/diagram/<diagram_id>")
+def get_diagram(diagram_id):
+    filename = DIAGRAM_FILES.get(diagram_id)
+    if not filename:
+        abort(404)
+    return send_from_directory(app.root_path, filename, mimetype="image/svg+xml")
 
 
 @app.route("/encrypt", methods=["POST"])
