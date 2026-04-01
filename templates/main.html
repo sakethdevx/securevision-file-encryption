@@ -256,6 +256,9 @@
         .logs-box {
             height: 220px;
             overflow: auto;
+            min-height: 160px;
+            max-height: 70vh;
+            resize: vertical;
             background: #0b1220;
             color: #cbd5e1;
             border-radius: 8px;
@@ -277,6 +280,12 @@
 
         .warn {
             color: var(--warning);
+        }
+
+        .logs-note {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 8px;
         }
     </style>
 </head>
@@ -361,6 +370,7 @@
                     <button type="button" onclick="clearLogs()">Clear Logs</button>
                 </div>
             </div>
+            <div class="logs-note">Tip: drag the bottom edge of the log panel to expand/collapse manually.</div>
             <div id="logsBox" class="logs-box"></div>
         </div>
     </div>
@@ -553,19 +563,26 @@
         }
 
         async function encryptDataOffline(data, password, filename, mimeType) {
+            addLog("ENC", "Step 1/9: Initializing offline encryption context");
             const saltKek = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
             const saltMac = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
             const nonceData = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
             const nonceWrap = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+            addLog("ENC", "Step 2/9: Generated salts and nonces");
 
+            addLog("ENC", "Step 3/9: Deriving KEK and MAC keys using PBKDF2");
             const kek = await deriveAesKey(password, saltKek);
             const macKey = await deriveKeyBytes(password, saltMac);
             const dataKey = crypto.getRandomValues(new Uint8Array(DATA_KEY_LENGTH));
             const dataAesKey = await importRawAesKey(dataKey);
+            addLog("ENC", "Step 4/9: Prepared random data key for payload encryption");
 
+            addLog("ENC", "Step 5/9: Encrypting payload with AES-GCM data key");
             const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonceData }, dataAesKey, data));
+            addLog("ENC", "Step 6/9: Wrapping data key with KEK (AES-GCM)");
             const wrappedKey = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonceWrap }, kek, dataKey));
 
+            addLog("ENC", "Step 7/9: Computing file/ciphertext/wrapped-key hashes");
             const fileHash = await sha256Hex(data);
             const ciphertextHash = await sha256HexBytes(encrypted);
             const wrappedKeyHash = await sha256HexBytes(wrappedKey);
@@ -591,26 +608,35 @@
 
             const header = createHeaderBytes(metadata);
             const packageWithoutMac = concatBytes(header, wrappedKey, encrypted);
+            addLog("ENC", "Step 8/9: Generating HMAC authentication tag");
             const packageMac = await hmacSha256(macKey, packageWithoutMac);
             const payload = concatBytes(packageWithoutMac, packageMac);
+
+            addLog("ENC", `Step 9/9: Offline package ready (${payload.length} bytes)`);
 
             return { payload, metadata };
         }
 
         async function decryptDataOffline(encryptedData, password) {
+            addLog("DEC", "Step 1/10: Parsing encrypted package header and metadata");
             const parsed = parseEncryptedPackage(encryptedData);
 
             if (parsed.version === "SV01") {
                 const { metadata, ciphertext } = parsed;
+                addLog("DEC", "Detected legacy SV01 package");
+                addLog("DEC", "Step 2/10: Deriving legacy AES key from PBKDF2");
                 const salt = base64ToBytes(metadata.salt);
                 const nonce = base64ToBytes(metadata.nonce);
                 const key = await deriveAesKey(password, salt, Number(metadata.kdf_iterations || PBKDF2_ITERATIONS));
+                addLog("DEC", "Step 3/10: Decrypting legacy ciphertext");
                 const plain = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, key, ciphertext));
 
+                addLog("DEC", "Step 4/10: Validating legacy plaintext hash");
                 const fileHash = await sha256HexBytes(plain);
                 if (metadata.file_hash_sha256 && metadata.file_hash_sha256 !== fileHash) {
                     throw new Error("Integrity verification failed: file hash mismatch");
                 }
+                addLog("DEC", "Legacy package decrypted and verified");
 
                 metadata.format = "SV01-legacy";
                 return {
@@ -630,20 +656,39 @@
             const nonceData = base64ToBytes(metadata.nonce_data);
             const nonceWrap = base64ToBytes(metadata.nonce_wrap);
 
+            addLog("DEC", "Step 2/10: Deriving KEK and MAC keys via PBKDF2");
             const kek = await deriveAesKey(password, saltKek, iterations);
             const macKey = await deriveKeyBytes(password, saltMac, iterations);
 
+            addLog("DEC", "Step 3/10: Verifying HMAC authentication tag");
             const hmacValid = await verifyHmacSha256(macKey, packageWithoutMac, mac);
             if (!hmacValid) throw new Error("Integrity verification failed: HMAC mismatch");
+            addLog("DEC", "Step 4/10: HMAC verification passed");
 
+            addLog("DEC", "Step 5/10: Unwrapping random data key using KEK");
             const dataKeyRaw = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonceWrap }, kek, wrappedKey));
             const dataAesKey = await importRawAesKey(dataKeyRaw);
+            addLog("DEC", "Step 6/10: Decrypting payload with unwrapped data key");
             const plain = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonceData }, dataAesKey, ciphertext));
 
+            addLog("DEC", "Step 7/10: Validating plaintext hash");
             const fileHash = await sha256HexBytes(plain);
             if (metadata.file_hash_sha256 && metadata.file_hash_sha256 !== fileHash) {
                 throw new Error("Integrity verification failed: file hash mismatch");
             }
+
+            addLog("DEC", "Step 8/10: Validating ciphertext hash");
+            const ciphertextHash = await sha256HexBytes(ciphertext);
+            if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
+                throw new Error("Integrity verification failed: ciphertext hash mismatch");
+            }
+
+            addLog("DEC", "Step 9/10: Validating wrapped key hash");
+            const wrappedKeyHash = await sha256HexBytes(wrappedKey);
+            if (metadata.wrapped_key_hash_sha256 && metadata.wrapped_key_hash_sha256 !== wrappedKeyHash) {
+                throw new Error("Integrity verification failed: wrapped key hash mismatch");
+            }
+            addLog("DEC", "Step 10/10: Offline decryption and verification complete");
 
             return {
                 blob: new Blob([plain], { type: metadata.mime_type || "application/octet-stream" }),
@@ -656,29 +701,37 @@
         }
 
         async function encryptDataOnline(file, password) {
+            addLog("ENC", "Step 1/4: Building online encryption request payload");
             const form = new FormData();
             form.append("file", file);
             form.append("key", password);
 
+            addLog("ENC", "Step 2/4: Sending request to /encrypt");
             const response = await fetch("/encrypt", { method: "POST", body: form });
             if (!response.ok) throw new Error(await response.text());
 
+            addLog("ENC", "Step 3/4: Reading encrypted response payload");
             const blob = await response.blob();
             const nameFromHeader = getFilenameFromDisposition(response.headers.get("Content-Disposition"));
+            addLog("ENC", "Step 4/4: Online encryption response received");
             return { payload: blob, filename: nameFromHeader || `${file.name}.enc` };
         }
 
         async function decryptDataOnline(encFile, password) {
+            addLog("DEC", "Step 1/4: Building online decryption request payload");
             const form = new FormData();
             form.append("file", encFile);
             form.append("key", password);
 
+            addLog("DEC", "Step 2/4: Sending request to /decrypt");
             const response = await fetch("/decrypt", { method: "POST", body: form });
             if (!response.ok) throw new Error(await response.text());
 
+            addLog("DEC", "Step 3/4: Reading decrypted response payload");
             const blob = await response.blob();
             const filename = getFilenameFromDisposition(response.headers.get("Content-Disposition")) || "decrypted_file";
             const mimeType = blob.type || response.headers.get("Content-Type") || "application/octet-stream";
+            addLog("DEC", "Step 4/4: Online decryption response received");
 
             return {
                 blob,
@@ -698,6 +751,7 @@
         }
 
         function downloadBlob(blob, filename) {
+            addLog("SYS", `Preparing browser download: ${filename}`);
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -721,8 +775,10 @@
             try {
                 const start = performance.now();
                 addLog("ENC", `Started ${mode.toUpperCase()} encryption for ${file.name} (${file.size} bytes)`);
+                addLog("ENC", `Input MIME type: ${file.type || "unknown"}`);
 
                 if (mode === "offline") {
+                    addLog("ENC", "Reading selected file into memory");
                     const arrayBuffer = await file.arrayBuffer();
                     const { payload, metadata } = await encryptDataOffline(arrayBuffer, key, file.name, file.type);
                     downloadBlob(new Blob([payload], { type: "application/octet-stream" }), `${file.name}.enc`);
@@ -741,6 +797,7 @@
                     status.className = "status ok";
                     addLog("ENC", "Offline encryption successful");
                 } else {
+                    addLog("ENC", "Using server-side encryption API");
                     const { payload, filename } = await encryptDataOnline(file, key);
                     downloadBlob(payload, filename);
 
@@ -773,12 +830,15 @@
             if (!encFile || !key) throw new Error("Please select encrypted file and enter decryption key");
 
             addLog("DEC", `Started ${mode.toUpperCase()} decryption for ${encFile.name}`);
+            addLog("DEC", `Encrypted input size: ${encFile.size} bytes`);
 
             if (mode === "offline") {
+                addLog("DEC", "Reading encrypted file into memory");
                 const data = new Uint8Array(await encFile.arrayBuffer());
                 return decryptDataOffline(data, key);
             }
 
+            addLog("DEC", "Using server-side decryption API");
             return decryptDataOnline(encFile, key);
         }
 
@@ -787,6 +847,7 @@
             try {
                 const start = performance.now();
                 const result = await decryptFileForUse();
+                addLog("DEC", `Decryption output: ${result.filename} (${result.mimeType}, ${result.blob.size} bytes)`);
                 downloadBlob(result.blob, result.filename);
 
                 const elapsed = (performance.now() - start) / 1000;
@@ -809,6 +870,7 @@
         }
 
         function resetPreview() {
+            addLog("PRV", "Resetting preview widgets");
             document.getElementById("previewImage").style.display = "none";
             document.getElementById("previewVideo").style.display = "none";
             document.getElementById("previewAudio").style.display = "none";
@@ -820,6 +882,7 @@
         async function renderPreview(blob, filename, mimeType) {
             resetPreview();
             const safeType = mimeType || "application/octet-stream";
+            addLog("PRV", `Preview dispatch for ${filename} with MIME ${safeType}`);
             document.getElementById("previewMeta").textContent = `File: ${filename} | MIME: ${safeType} | Size: ${blob.size} bytes`;
 
             const url = URL.createObjectURL(blob);
@@ -834,37 +897,44 @@
                 image.src = url;
                 image.style.display = "block";
                 placeholder.style.display = "none";
+                addLog("PRV", "Rendered image preview");
                 return;
             }
             if (safeType.startsWith("video/")) {
                 video.src = url;
                 video.style.display = "block";
                 placeholder.style.display = "none";
+                addLog("PRV", "Rendered video preview");
                 return;
             }
             if (safeType.startsWith("audio/")) {
                 audio.src = url;
                 audio.style.display = "block";
                 placeholder.style.display = "none";
+                addLog("PRV", "Rendered audio preview");
                 return;
             }
             if (safeType === "application/pdf") {
                 pdf.src = url;
                 pdf.style.display = "block";
                 placeholder.style.display = "none";
+                addLog("PRV", "Rendered PDF preview");
                 return;
             }
 
             const looksText = safeType.startsWith("text/") || mimeTextLike.has(safeType) || filename.match(/\.(txt|md|json|csv|xml|log|py|js|html|css)$/i);
             if (looksText) {
+                addLog("PRV", "Detected text-like content, reading blob as text");
                 const content = await blob.text();
                 text.textContent = content.slice(0, 10000);
                 text.style.display = "block";
                 placeholder.style.display = "none";
+                addLog("PRV", `Rendered text preview (${Math.min(content.length, 10000)} chars shown)`);
                 return;
             }
 
             document.getElementById("previewMeta").textContent += " | Preview not supported for this type.";
+            addLog("PRV", "Preview not supported for this MIME type");
         }
 
         async function decryptAndPreview() {
@@ -900,8 +970,10 @@
 
             try {
                 const start = performance.now();
+                addLog("VFY", `Step 1/4: Parsing encrypted package for ${file.name}`);
                 const parsed = parseEncryptedPackage(new Uint8Array(await file.arrayBuffer()));
                 const { metadata, ciphertext } = parsed;
+                addLog("VFY", "Step 2/4: Validating ciphertext hash");
                 const ciphertextHash = await sha256HexBytes(ciphertext);
 
                 if (metadata.ciphertext_hash_sha256 && metadata.ciphertext_hash_sha256 !== ciphertextHash) {
@@ -911,6 +983,7 @@
                 let hmacNote = "Not checked";
                 const key = document.getElementById("decKey").value;
                 if (parsed.version === "SV02" && key) {
+                    addLog("VFY", "Step 3/4: Verifying HMAC with provided key");
                     const saltMac = base64ToBytes(metadata.salt_mac);
                     const macKey = await deriveKeyBytes(key, saltMac, Number(metadata.kdf_iterations || PBKDF2_ITERATIONS));
                     const ok = await verifyHmacSha256(macKey, parsed.packageWithoutMac, parsed.mac);
@@ -919,6 +992,7 @@
                 }
 
                 const elapsed = (performance.now() - start) / 1000;
+                addLog("VFY", "Step 4/4: Package verification complete");
                 updateProofPanel({
                     format: metadata.format || parsed.version,
                     integrity: `Offline package verification passed (${hmacNote})`,
