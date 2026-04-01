@@ -175,10 +175,13 @@
         <div class="proof-panel">
             <h2>🔍 Cryptographic Proof Panel</h2>
             <ul>
+                <li>✔ Package Format: <span id="proofFormat">SV02 (Multilevel)</span></li>
                 <li>✔ Encryption Algorithm: <span id="proofAlgo">Layered AES-256-GCM (Data + Key Wrap)</span></li>
                 <li>✔ Key Derivation: <span id="proofKdf">PBKDF2-HMAC-SHA256 (Dual-Salt, 150000 iterations)</span></li>
                 <li>✔ Integrity Check: <span id="proofIntegrity">SHA-256 Pending</span></li>
                 <li>✔ Authentication: <span id="proofChain">HMAC-SHA256 + Hash-Chain Logs</span></li>
+                <li>✔ Security Layers: <span id="proofLayers">3 Layers Active</span></li>
+                <li>✔ Operation Mode: <span id="proofMode">Idle</span></li>
                 <li>✔ Status: <span id="proofStatus" class="proof-secure">Secure ✅</span></li>
                 <li>✔ Metrics: <span id="proofMetrics">Waiting for operation</span></li>
             </ul>
@@ -241,9 +244,18 @@
             decLogBox: { lastHash: "GENESIS", queue: Promise.resolve() }
         };
 
-        function updateProofPanel({ integrity, status, metrics }) {
+        function updateProofPanel({ integrity, status, metrics, format, mode, layers }) {
             if (integrity) {
                 document.getElementById("proofIntegrity").textContent = integrity;
+            }
+            if (format) {
+                document.getElementById("proofFormat").textContent = format;
+            }
+            if (mode) {
+                document.getElementById("proofMode").textContent = mode;
+            }
+            if (layers) {
+                document.getElementById("proofLayers").textContent = layers;
             }
             if (metrics) {
                 document.getElementById("proofMetrics").textContent = metrics;
@@ -662,6 +674,9 @@
 
                 updateProofPanel({
                     integrity: "Multilevel: AES-GCM + Wrap + HMAC + SHA-256",
+                    format: "SV02 (Multilevel)",
+                    mode: "Encryption",
+                    layers: "3 Layers Active",
                     status: "Secure ✅",
                     metrics: `Encryption ${elapsedSec.toFixed(2)}s | ${(file.size / (1024 * 1024)).toFixed(2)} MB | ${throughput.toFixed(2)} MB/s`
                 });
@@ -705,6 +720,9 @@
 
             updateProofPanel({
                 integrity: hmacVerified ? "HMAC + SHA-256 Verified" : "SHA-256 Verified (Legacy)",
+                format: metadata.format || "SV01 (Legacy)",
+                mode: "Decryption + Verification",
+                layers: hmacVerified ? "3 Layers Active" : "1 Layer (Legacy)",
                 status: "Secure ✅",
                 metrics: `Decryption ${elapsedSec.toFixed(2)}s | ${(plaintext.length / (1024 * 1024)).toFixed(2)} MB | ${throughput.toFixed(2)} MB/s`
             });
@@ -827,6 +845,9 @@
 
                 updateProofPanel({
                     integrity: hmacStatus.includes("Verified") ? "Offline HMAC + Hash Verified" : "Offline Ciphertext Hash Verified",
+                    format: metadata.format || parsed.version,
+                    mode: "Offline Verify",
+                    layers: parsed.version === "SV02" ? "3 Layers Verified" : "1 Layer (Legacy)",
                     status: "Secure ✅",
                     metrics: `Offline Verify ${elapsedSec.toFixed(2)}s | ${(file.size / (1024 * 1024)).toFixed(2)} MB`
                 });
