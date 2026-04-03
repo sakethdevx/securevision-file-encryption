@@ -313,6 +313,52 @@
             background: #fff;
             object-fit: contain;
         }
+
+        .strength-meter {
+            margin-top: -4px;
+            margin-bottom: 8px;
+        }
+
+        .strength-bar {
+            display: flex;
+            gap: 4px;
+            height: 6px;
+            margin-bottom: 5px;
+        }
+
+        .strength-segment {
+            flex: 1;
+            border-radius: 3px;
+            background: #e2e8f0;
+            transition: background 0.25s ease;
+        }
+
+        .strength-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .strength-label {
+            font-size: 12px;
+            font-weight: 600;
+            min-height: 16px;
+            color: var(--muted);
+        }
+
+        .strength-hints {
+            font-size: 11px;
+            color: var(--muted);
+            min-height: 14px;
+            text-align: right;
+        }
+
+        .strength-lvl-1 .strength-segment:nth-child(1) { background: #dc2626; }
+        .strength-lvl-2 .strength-segment:nth-child(-n+2) { background: #ea580c; }
+        .strength-lvl-3 .strength-segment:nth-child(-n+3) { background: #ca8a04; }
+        .strength-lvl-4 .strength-segment:nth-child(-n+4) { background: #16a34a; }
+        .strength-lvl-5 .strength-segment:nth-child(-n+5) { background: #166534; }
     </style>
 </head>
 
@@ -354,7 +400,20 @@
             <div class="card">
                 <h2>Encrypt File</h2>
                 <input type="file" id="plainFile">
-                <input type="password" id="encKey" placeholder="Encryption key">
+                <input type="password" id="encKey" placeholder="Encryption key" oninput="updatePasswordStrength(this.value)">
+                <div class="strength-meter" id="encKeyStrengthMeter" aria-live="polite">
+                    <div class="strength-bar" id="encStrBar">
+                        <div class="strength-segment" id="encStrSeg1"></div>
+                        <div class="strength-segment" id="encStrSeg2"></div>
+                        <div class="strength-segment" id="encStrSeg3"></div>
+                        <div class="strength-segment" id="encStrSeg4"></div>
+                        <div class="strength-segment" id="encStrSeg5"></div>
+                    </div>
+                    <div class="strength-row">
+                        <span class="strength-label" id="encStrLabel"></span>
+                        <span class="strength-hints" id="encStrHints"></span>
+                    </div>
+                </div>
                 <button type="button" onclick="encryptAndDownload()">Encrypt & Download .enc</button>
                 <p id="encStatus" class="status"></p>
             </div>
@@ -423,6 +482,89 @@
         const MAC_LENGTH = 32;
         const HEADER_MAGIC_V2 = "SV02";
         const HEADER_MAGIC_LEGACY = "SV01";
+
+        function scorePasswordStrength(password) {
+            if (!password) return { score: 0, label: "", hints: "", color: "" };
+
+            let score = 0;
+            const hints = [];
+
+            // --- Length scoring (0-3 points) ---
+            const len = password.length;
+            if (len >= 16) score += 3;
+            else if (len >= 12) score += 2;
+            else if (len >= 8) score += 1;
+            else hints.push("use ≥8 characters");
+
+            // --- Character variety (0-4 points) ---
+            const hasLower = /[a-z]/.test(password);
+            const hasUpper = /[A-Z]/.test(password);
+            const hasDigit = /[0-9]/.test(password);
+            const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+            if (hasLower) score += 1; else hints.push("add lowercase letters");
+            if (hasUpper) score += 1; else hints.push("add uppercase letters");
+            if (hasDigit) score += 1; else hints.push("add numbers");
+            if (hasSpecial) score += 1; else hints.push("add special characters");
+
+            // --- Entropy bonus: reward high character-set diversity at length ---
+            const charsetSize =
+                (hasLower ? 26 : 0) +
+                (hasUpper ? 26 : 0) +
+                (hasDigit ? 10 : 0) +
+                (hasSpecial ? 32 : 0);
+            const entropy = len * Math.log2(Math.max(charsetSize, 1));
+            if (entropy >= 75) score += 2;
+            else if (entropy >= 50) score += 1;
+
+            // --- Penalties ---
+            // Penalise long runs of identical characters (e.g. "aaaa")
+            if (/(.)\1{3,}/.test(password)) score -= 1;
+            // Penalise common keyboard sequences (e.g. "1234", "abcd", "qwerty") — at most once
+            const sequences = ["0123456789", "abcdefghijklmnopqrstuvwxyz", "qwertyuiop", "asdfghjkl", "zxcvbnm"];
+            let sequencePenaltyApplied = false;
+            outer: for (const seq of sequences) {
+                for (let i = 0; i <= seq.length - 4; i++) {
+                    if (password.toLowerCase().includes(seq.slice(i, i + 4))) {
+                        sequencePenaltyApplied = true;
+                        break outer;
+                    }
+                }
+            }
+            if (sequencePenaltyApplied) score -= 1;
+
+            // Clamp score to 1-9 (max achievable: 3 length + 4 variety + 2 entropy)
+            score = Math.max(1, Math.min(9, score));
+
+            let level, label, labelColor;
+            if (score <= 2) { level = 1; label = "Very Weak"; labelColor = "#dc2626"; }
+            else if (score <= 4) { level = 2; label = "Weak"; labelColor = "#ea580c"; }
+            else if (score <= 6) { level = 3; label = "Fair"; labelColor = "#ca8a04"; }
+            else if (score <= 8) { level = 4; label = "Strong"; labelColor = "#16a34a"; }
+            else { level = 5; label = "Very Strong"; labelColor = "#166534"; }
+
+            return { level, label, labelColor, hints: hints.slice(0, 2).join(", ") };
+        }
+
+        function updatePasswordStrength(password) {
+            const bar = document.getElementById("encStrBar");
+            const labelEl = document.getElementById("encStrLabel");
+            const hintsEl = document.getElementById("encStrHints");
+
+            if (!password) {
+                bar.className = "strength-bar";
+                labelEl.textContent = "";
+                labelEl.style.color = "";
+                hintsEl.textContent = "";
+                return;
+            }
+
+            const { level, label, labelColor, hints } = scorePasswordStrength(password);
+            bar.className = `strength-bar strength-lvl-${level}`;
+            labelEl.textContent = label;
+            labelEl.style.color = labelColor;
+            hintsEl.textContent = hints ? `Tip: ${hints}` : "";
+        }
 
         let logsEnabled = true;
         let lastLogHash = "GENESIS";
